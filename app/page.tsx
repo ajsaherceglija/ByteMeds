@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,7 +24,8 @@ import {
   ChevronDown,
   Stethoscope,
   UserCircle,
-  ShieldCheck
+  ShieldCheck,
+  LayoutDashboard
 } from "lucide-react";
 
 // Interface for feature items
@@ -35,6 +37,7 @@ interface Feature {
 
 export default function Home() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
 
@@ -53,6 +56,12 @@ export default function Home() {
     router.push(path);
   };
 
+  // Function to handle dashboard navigation
+  const handleDashboardNavigation = () => {
+    const path = session?.user?.is_doctor ? '/doctor-dashboard' : '/dashboard';
+    router.push(path);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
@@ -63,23 +72,36 @@ export default function Home() {
             <span className="text-xl font-bold text-blue-600 dark:text-blue-400">ByteMeds</span>
           </div>
           <nav className="flex gap-4">
-            <Button
-              variant="outline"
-              onClick={() => handleAuthNavigation('/auth/signin')}
-              className="hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors"
-              aria-label="Login to your account"
-            >
-              <LogIn className="w-4 h-4 mr-2" />
-              Login
-            </Button>
-            <Button
-              onClick={() => handleAuthNavigation('/auth/signup')}
-              className="bg-blue-600 hover:bg-blue-700 text-white transition-colors"
-              aria-label="Create a new account"
-            >
-              <UserPlus className="w-4 h-4 mr-2" />
-              Register
-            </Button>
+            {session ? (
+              <Button
+                onClick={handleDashboardNavigation}
+                className="bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                aria-label="Go to dashboard"
+              >
+                <LayoutDashboard className="w-4 h-4 mr-2" />
+                Go to Dashboard
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => handleAuthNavigation('/auth/signin')}
+                  className="hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors"
+                  aria-label="Login to your account"
+                >
+                  <LogIn className="w-4 h-4 mr-2" />
+                  Login
+                </Button>
+                <Button
+                  onClick={() => handleAuthNavigation('/auth/signup')}
+                  className="bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                  aria-label="Create a new account"
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Register
+                </Button>
+              </>
+            )}
           </nav>
         </div>
       </header>
