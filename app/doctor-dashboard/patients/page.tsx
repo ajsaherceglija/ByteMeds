@@ -26,6 +26,7 @@ import {
   TabsTrigger,
 } from '@/components/ui/tabs';
 import Link from 'next/link';
+import { SharePatientModal } from './components/share-patient-modal';
 
 interface Patient {
   id: string;
@@ -219,11 +220,19 @@ function PatientsTable({ patients, showSharedBy = false }: PatientsTableProps) {
               <TableCell>{patient.sharedBy}</TableCell>
             )}
             <TableCell className="text-right">
-              <Button variant="outline" size="sm" asChild>
-                <Link href={`/doctor-dashboard/patients/${patient.id}`}>
-                  View Details
-                </Link>
-              </Button>
+              <div className="flex justify-end gap-2">
+                {!showSharedBy && (
+                  <SharePatientModal
+                    patientName={patient.name}
+                    patientId={patient.id}
+                  />
+                )}
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/doctor-dashboard/patients/${patient.id}`}>
+                    View Details
+                  </Link>
+                </Button>
+              </div>
             </TableCell>
           </TableRow>
         ))}
