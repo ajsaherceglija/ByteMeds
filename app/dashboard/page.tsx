@@ -11,9 +11,15 @@ import {
 import { Button } from '../../components/ui/button';
 import {
   Plus,
+  Bell,
+  Clock,
+  User,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { createClient } from '../utils/supabase/client';
 import { LineChart } from '../../components/charts/line-chart';
+import { format } from 'date-fns';
 
 // Mock data for patient dashboard
 const mockPatientStats = {
@@ -37,9 +43,86 @@ const mockData = [
 
 export default function DashboardPage() {
   const { data: session } = useSession();
+  const [activeAppointments, setActiveAppointments] = useState<any[]>([]);
+  const supabase = createClient();
+
+  useEffect(() => {
+    const fetchActiveAppointments = async () => {
+      if (!session?.user?.id) return;
+      
+      const today = new Date();
+      const sevenDaysFromNow = new Date();
+      sevenDaysFromNow.setDate(today.getDate() + 7);
+
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('patient_id', session.user.id)
+        .eq('is_active', true)
+        .gte('appointment_date', today.toISOString())
+        .lte('appointment_date', sevenDaysFromNow.toISOString())
+        .order('appointment_date', { ascending: true });
+
+      if (!error && data) {
+        setActiveAppointments(data);
+      }
+    };
+
+    fetchActiveAppointments();
+  }, [session]);
 
   return (
     <div className="space-y-6">
+      {/* Active Appointments Reminder */}
+      {activeAppointments.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5" />
+              Upcoming Appointments
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {activeAppointments.map((appointment) => (
+                <div
+                  key={appointment.id}
+                  className="flex items-center justify-between rounded-lg border p-4"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <p className="font-medium">
+                         {appointment.doctor_name}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Clock className="h-4 w-4" />
+                      <span>
+                        {format(new Date(appointment.appointment_date), 'h:mm a')} ({appointment.duration} mins)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700">
+                        upcoming
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        {appointment.type}
+                      </span>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/dashboard/appointments/${appointment.id}`}>
+                      View Details
+                    </Link>
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    
       <div>
         <h1 className="text-3xl font-bold tracking-tight">
           Welcome back, {session?.user?.name}
@@ -63,7 +146,7 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle>Upcoming Appointments</CardTitle>
+            <CardTitle>All Appointments</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">{mockPatientStats.upcomingAppointments}</p>

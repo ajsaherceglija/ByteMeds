@@ -48,7 +48,7 @@ const mockAppointments = [
 
 export default function AppointmentsPage() {
   const { data: session } = useSession();
-  const isDoctor = session?.user?.isDoctor;
+  const isDoctor = session?.user?.is_doctor;
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
 
   const filteredAppointments = mockAppointments.filter(
