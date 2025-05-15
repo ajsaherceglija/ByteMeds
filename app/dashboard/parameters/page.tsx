@@ -2,7 +2,6 @@
 
 import { useSession } from 'next-auth/react';
 import { format } from 'date-fns';
-import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -19,50 +18,187 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { Plus } from 'lucide-react';
+import { ParameterEdit } from '@/components/parameters/parameter-edit';
+import { AddParameterDialog } from '@/components/parameters/add-parameter-dialog';
+import { toast } from 'sonner';
+import { useEffect, useState } from 'react';
 
-// Add type definitions for the mock data
-type ParameterReading = {
-  date: string;
+// Add type definitions for the data
+type ParameterType =
+  | 'weight'
+  | 'bloodPressureSystolic'
+  | 'bloodPressureDiastolic'
+  | 'bloodSugar'
+  | 'heartRate';
+
+type Parameter = {
+  id: string;
+  patient_id: string;
+  parameter: ParameterType;
   value: number;
+  unit: string;
+  notes: string | null;
+  created_at: string;
 };
 
-type BloodPressureReading = {
-  date: string;
-  systolic: number;
-  diastolic: number;
+type ParametersByType = {
+  [key in ParameterType]?: Parameter[];
 };
 
-// Mock data - replace with actual API calls
-const mockParameters = {
-  weight: [
-    { date: '2024-03-01', value: 75.5 },
-    { date: '2024-03-05', value: 75.2 },
-    { date: '2024-03-10', value: 74.8 },
-    { date: '2024-03-15', value: 74.5 },
-  ] as ParameterReading[],
-  bloodPressure: [
-    { date: '2024-03-01', systolic: 120, diastolic: 80 },
-    { date: '2024-03-05', systolic: 118, diastolic: 78 },
-    { date: '2024-03-10', systolic: 122, diastolic: 82 },
-    { date: '2024-03-15', systolic: 119, diastolic: 79 },
-  ] as BloodPressureReading[],
-  bloodSugar: [
-    { date: '2024-03-01', value: 95 },
-    { date: '2024-03-05', value: 98 },
-    { date: '2024-03-10', value: 92 },
-    { date: '2024-03-15', value: 94 },
-  ] as ParameterReading[],
-  heartRate: [
-    { date: '2024-03-01', value: 72 },
-    { date: '2024-03-05', value: 75 },
-    { date: '2024-03-10', value: 70 },
-    { date: '2024-03-15', value: 73 },
-  ],
+const parameterConfig = {
+  weight: {
+    title: 'Weight',
+    description: 'Measured in kilograms (kg)',
+    min: 0,
+    max: 500,
+    step: 0.1,
+    color: '#2563eb',
+  },
+  bloodPressureSystolic: {
+    title: 'Blood Pressure (Systolic)',
+    description: 'Measured in mmHg',
+    min: 0,
+    max: 300,
+    step: 1,
+    color: '#2563eb',
+  },
+  bloodPressureDiastolic: {
+    title: 'Blood Pressure (Diastolic)',
+    description: 'Measured in mmHg',
+    min: 0,
+    max: 200,
+    step: 1,
+    color: '#7c3aed',
+  },
+  bloodSugar: {
+    title: 'Blood Sugar',
+    description: 'Measured in mg/dL',
+    min: 0,
+    max: 500,
+    step: 1,
+    color: '#2563eb',
+  },
+  heartRate: {
+    title: 'Heart Rate',
+    description: 'Beats per minute (BPM)',
+    min: 0,
+    max: 300,
+    step: 1,
+    color: '#2563eb',
+  },
 };
 
 export default function ParametersPage() {
-  //const { data: session } = useSession();
+  const { data: session } = useSession();
+  const [parameters, setParameters] = useState<ParametersByType>({});
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchParameters = async () => {
+    try {
+      const response = await fetch('/api/parameters');
+      if (!response.ok) {
+        throw new Error('Failed to fetch parameters');
+      }
+
+      const data: Parameter[] = await response.json();
+
+      // Group parameters by type
+      const grouped = data.reduce((acc, param) => {
+        if (!acc[param.parameter]) {
+          acc[param.parameter] = [];
+        }
+        acc[param.parameter]!.push(param);
+        return acc;
+      }, {} as ParametersByType);
+
+      // Sort each group by created_at
+      Object.keys(grouped).forEach((type) => {
+        grouped[type as ParameterType]?.sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+      });
+
+      setParameters(grouped);
+    } catch (error) {
+      console.error('Error fetching parameters:', error);
+      toast.error('Failed to fetch parameters');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (session) {
+      fetchParameters();
+    }
+  }, [session]);
+
+  const handleUpdateParameter = async (type: ParameterType, value: number, unit: string) => {
+    try {
+      const response = await fetch('/api/parameters', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          parameter: type,
+          value,
+          unit,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update parameter');
+      }
+
+      await fetchParameters();
+      return Promise.resolve();
+    } catch (error) {
+      console.error('Error updating parameter:', error);
+      return Promise.reject(error);
+    }
+  };
+
+  const handleAddParameter = async (parameter: {
+    parameter: string;
+    value: number;
+    unit: string;
+    notes?: string | null;
+  }) => {
+    try {
+      const response = await fetch('/api/parameters', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(parameter),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add parameter');
+      }
+
+      await fetchParameters();
+      return Promise.resolve();
+    } catch (error) {
+      console.error('Error adding parameter:', error);
+      return Promise.reject(error);
+    }
+  };
+
+  const getLatestValue = (type: ParameterType) => {
+    const values = parameters[type];
+    return values && values.length > 0 ? values[values.length - 1].value : 0;
+  };
+
+  const getLatestUnit = (type: ParameterType) => {
+    const values = parameters[type];
+    return values && values.length > 0 ? values[values.length - 1].unit : parameterConfig[type].description.split(' ').pop()?.replace(/[()]/g, '');
+  };
+
+  if (!session) {
+    return null;
+  }
 
   return (
     <div className="space-y-6">
@@ -73,10 +209,7 @@ export default function ParametersPage() {
             Track and monitor your health metrics
           </p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Log New Parameters
-        </Button>
+        <AddParameterDialog onAdd={handleAddParameter} />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -85,33 +218,42 @@ export default function ParametersPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Weight</CardTitle>
-                <CardDescription>Measured in kilograms (kg)</CardDescription>
+                <CardTitle>{parameterConfig.weight.title}</CardTitle>
+                <CardDescription>{parameterConfig.weight.description}</CardDescription>
               </div>
-              <div className="text-2xl font-bold">
-                {mockParameters.weight[mockParameters.weight.length - 1].value} kg
-              </div>
+              <ParameterEdit
+                value={getLatestValue('weight')}
+                unit={getLatestUnit('weight') || 'kg'}
+                onSave={(value, unit) => handleUpdateParameter('weight', value, unit)}
+                min={parameterConfig.weight.min}
+                max={parameterConfig.weight.max}
+                step={parameterConfig.weight.step}
+                parameter="weight"
+              />
             </div>
           </CardHeader>
           <CardContent className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={mockParameters.weight}>
+              <LineChart data={parameters.weight}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
-                  dataKey="date"
+                  dataKey="created_at"
                   tickFormatter={(date) => format(new Date(date), 'MMM d')}
                 />
                 <YAxis domain={['auto', 'auto']} />
                 <Tooltip
-                  labelFormatter={(date) => format(new Date(date), 'PPP')}
-                  formatter={(value) => [`${value} kg`, 'Weight']}
+                  labelFormatter={(date) => ""}
+                  formatter={(value: number) => [
+                    `${value.toFixed(1)} ${getLatestUnit('weight')}`,
+                    'Weight',
+                  ]}
                 />
                 <Line
                   type="monotone"
                   dataKey="value"
-                  stroke="#2563eb"
+                  stroke={parameterConfig.weight.color}
                   strokeWidth={2}
-                  dot={{ fill: '#2563eb' }}
+                  dot={{ fill: parameterConfig.weight.color }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -126,54 +268,62 @@ export default function ParametersPage() {
                 <CardTitle>Blood Pressure</CardTitle>
                 <CardDescription>Systolic/Diastolic (mmHg)</CardDescription>
               </div>
-              <div className="text-2xl font-bold">
-                {
-                  mockParameters.bloodPressure[
-                    mockParameters.bloodPressure.length - 1
-                  ].systolic
-                }
-                /
-                {
-                  mockParameters.bloodPressure[
-                    mockParameters.bloodPressure.length - 1
-                  ].diastolic
-                }{' '}
-                mmHg
+              <div className="flex flex-col gap-2">
+                <ParameterEdit
+                  value={getLatestValue('bloodPressureSystolic')}
+                  unit={getLatestUnit('bloodPressureSystolic') || 'mmHg'}
+                  onSave={(value, unit) => handleUpdateParameter('bloodPressureSystolic', value, unit)}
+                  min={parameterConfig.bloodPressureSystolic.min}
+                  max={parameterConfig.bloodPressureSystolic.max}
+                  step={parameterConfig.bloodPressureSystolic.step}
+                  parameter="bloodPressureSystolic"
+                />
+                <ParameterEdit
+                  value={getLatestValue('bloodPressureDiastolic')}
+                  unit={getLatestUnit('bloodPressureDiastolic') || 'mmHg'}
+                  onSave={(value, unit) => handleUpdateParameter('bloodPressureDiastolic', value, unit)}
+                  min={parameterConfig.bloodPressureDiastolic.min}
+                  max={parameterConfig.bloodPressureDiastolic.max}
+                  step={parameterConfig.bloodPressureDiastolic.step}
+                  parameter="bloodPressureDiastolic"
+                />
               </div>
             </div>
           </CardHeader>
           <CardContent className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={mockParameters.bloodPressure}>
+              <LineChart>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="date"
-                  tickFormatter={(date) => format(new Date(date), 'MMM d')}
-                />
-                <YAxis domain={['auto', 'auto']} />
+                
                 <Tooltip
-                  labelFormatter={(date) => format(new Date(date), 'PPP')}
-                  formatter={(value, name) => [
+                  labelFormatter={(date) => ""}
+                  formatter={(value: number, name) => [
                     `${value} mmHg`,
                     name === 'systolic' ? 'Systolic' : 'Diastolic',
                   ]}
                 />
-                <Line
-                  type="monotone"
-                  dataKey="systolic"
-                  stroke="#2563eb"
-                  strokeWidth={2}
-                  dot={{ fill: '#2563eb' }}
-                  name="Systolic"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="diastolic"
-                  stroke="#7c3aed"
-                  strokeWidth={2}
-                  dot={{ fill: '#7c3aed' }}
-                  name="Diastolic"
-                />
+                {parameters.bloodPressureSystolic && (
+                  <Line
+                    data={parameters.bloodPressureSystolic}
+                    type="monotone"
+                    dataKey="value"
+                    stroke={parameterConfig.bloodPressureSystolic.color}
+                    strokeWidth={2}
+                    dot={{ fill: parameterConfig.bloodPressureSystolic.color }}
+                    name="Systolic"
+                  />
+                )}
+                {parameters.bloodPressureDiastolic && (
+                  <Line
+                    data={parameters.bloodPressureDiastolic}
+                    type="monotone"
+                    dataKey="value"
+                    stroke={parameterConfig.bloodPressureDiastolic.color}
+                    strokeWidth={2}
+                    dot={{ fill: parameterConfig.bloodPressureDiastolic.color }}
+                    name="Diastolic"
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
@@ -184,34 +334,42 @@ export default function ParametersPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Blood Sugar</CardTitle>
-                <CardDescription>Measured in mg/dL</CardDescription>
+                <CardTitle>{parameterConfig.bloodSugar.title}</CardTitle>
+                <CardDescription>{parameterConfig.bloodSugar.description}</CardDescription>
               </div>
-              <div className="text-2xl font-bold">
-                {mockParameters.bloodSugar[mockParameters.bloodSugar.length - 1].value}{' '}
-                mg/dL
-              </div>
+              <ParameterEdit
+                value={getLatestValue('bloodSugar')}
+                unit={getLatestUnit('bloodSugar') || 'mg/dL'}
+                onSave={(value, unit) => handleUpdateParameter('bloodSugar', value, unit)}
+                min={parameterConfig.bloodSugar.min}
+                max={parameterConfig.bloodSugar.max}
+                step={parameterConfig.bloodSugar.step}
+                parameter="bloodSugar"
+              />
             </div>
           </CardHeader>
           <CardContent className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={mockParameters.bloodSugar}>
+              <LineChart data={parameters.bloodSugar}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
-                  dataKey="date"
+                  dataKey="created_at"
                   tickFormatter={(date) => format(new Date(date), 'MMM d')}
                 />
                 <YAxis domain={['auto', 'auto']} />
                 <Tooltip
-                  labelFormatter={(date) => format(new Date(date), 'PPP')}
-                  formatter={(value) => [`${value} mg/dL`, 'Blood Sugar']}
+                  labelFormatter={(date) => ""}
+                  formatter={(value: number) => [
+                    `${value} ${getLatestUnit('bloodSugar')}`,
+                    'Blood Sugar',
+                  ]}
                 />
                 <Line
                   type="monotone"
                   dataKey="value"
-                  stroke="#2563eb"
+                  stroke={parameterConfig.bloodSugar.color}
                   strokeWidth={2}
-                  dot={{ fill: '#2563eb' }}
+                  dot={{ fill: parameterConfig.bloodSugar.color }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -223,34 +381,42 @@ export default function ParametersPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Heart Rate</CardTitle>
-                <CardDescription>Beats per minute (BPM)</CardDescription>
+                <CardTitle>{parameterConfig.heartRate.title}</CardTitle>
+                <CardDescription>{parameterConfig.heartRate.description}</CardDescription>
               </div>
-              <div className="text-2xl font-bold">
-                {mockParameters.heartRate[mockParameters.heartRate.length - 1].value}{' '}
-                BPM
-              </div>
+              <ParameterEdit
+                value={getLatestValue('heartRate')}
+                unit={getLatestUnit('heartRate') || 'BPM'}
+                onSave={(value, unit) => handleUpdateParameter('heartRate', value, unit)}
+                min={parameterConfig.heartRate.min}
+                max={parameterConfig.heartRate.max}
+                step={parameterConfig.heartRate.step}
+                parameter="heartRate"
+              />
             </div>
           </CardHeader>
           <CardContent className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={mockParameters.heartRate}>
+              <LineChart data={parameters.heartRate}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
-                  dataKey="date"
+                  dataKey="created_at"
                   tickFormatter={(date) => format(new Date(date), 'MMM d')}
                 />
                 <YAxis domain={['auto', 'auto']} />
                 <Tooltip
-                  labelFormatter={(date) => format(new Date(date), 'PPP')}
-                  formatter={(value) => [`${value} BPM`, 'Heart Rate']}
+                  labelFormatter={(date) => ""}
+                  formatter={(value: number) => [
+                    `${value} ${getLatestUnit('heartRate')}`,
+                    'Heart Rate',
+                  ]}
                 />
                 <Line
                   type="monotone"
                   dataKey="value"
-                  stroke="#2563eb"
+                  stroke={parameterConfig.heartRate.color}
                   strokeWidth={2}
-                  dot={{ fill: '#2563eb' }}
+                  dot={{ fill: parameterConfig.heartRate.color }}
                 />
               </LineChart>
             </ResponsiveContainer>
