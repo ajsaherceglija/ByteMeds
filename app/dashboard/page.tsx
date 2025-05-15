@@ -14,6 +14,7 @@ import {
   Bell,
   Clock,
   User,
+  Pill,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -44,17 +45,19 @@ const mockData = [
 export default function DashboardPage() {
   const { data: session } = useSession();
   const [activeAppointments, setActiveAppointments] = useState<any[]>([]);
+  const [medicationReminders, setMedicationReminders] = useState<any[]>([]);
   const supabase = createClient();
 
   useEffect(() => {
-    const fetchActiveAppointments = async () => {
+    const fetchDashboardData = async () => {
       if (!session?.user?.id) return;
-      
+
       const today = new Date();
       const sevenDaysFromNow = new Date();
       sevenDaysFromNow.setDate(today.getDate() + 7);
 
-      const { data, error } = await supabase
+      // Fetch appointments (next 7 days)
+      const { data: appointments, error: appointmentsError } = await supabase
         .from('appointments')
         .select('*')
         .eq('patient_id', session.user.id)
@@ -63,16 +66,28 @@ export default function DashboardPage() {
         .lte('appointment_date', sevenDaysFromNow.toISOString())
         .order('appointment_date', { ascending: true });
 
-      if (!error && data) {
-        setActiveAppointments(data);
-      }
+      // Fetch active medications (all future-dated)
+      const { data: medications, error: medicationsError } = await supabase
+        .from('prescriptions')
+        .select('*')
+        .eq('patient_id', session.user.id)
+        .eq('status', 'active')
+        .gte('valid_until', today.toISOString())
+        .order('valid_until', { ascending: true });
+
+      if (!appointmentsError) setActiveAppointments(appointments || []);
+      if (!medicationsError) setMedicationReminders(medications || []);
     };
 
-    fetchActiveAppointments();
+    fetchDashboardData();
   }, [session]);
 
   return (
     <div className="space-y-6">
+      <h1 className="text-3xl font-bold tracking-tight">
+        Welcome back, {session?.user?.name}
+      </h1>
+
       {/* Active Appointments Reminder */}
       {activeAppointments.length > 0 && (
         <Card>
@@ -93,7 +108,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2">
                       <User className="h-4 w-4 text-muted-foreground" />
                       <p className="font-medium">
-                         {appointment.doctor_name}
+                        {appointment.doctor_name}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -122,11 +137,71 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       )}
-    
+
+      {/* Active Medications Reminder */}
+      {medicationReminders.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Pill className="h-5 w-5" />
+              Active Medications
+            </CardTitle>
+            <CardDescription>
+              These medications are currently active until their expiration date
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {medicationReminders.map((prescription) => {
+                const expiresSoon = new Date(prescription.valid_until) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+                return (
+                  <div
+                    key={prescription.id}
+                    className="flex items-start justify-between rounded-lg border p-4"
+                  >
+                    <div className="space-y-1">
+                      <p className="font-medium">
+                        {prescription.medication_name || "Prescribed Medication"}
+                      </p>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Clock className="h-4 w-4" />
+                        <span>
+                          Valid until: {format(new Date(prescription.valid_until), 'MMMM d, yyyy')}
+                        </span>
+                      </div>
+                      {prescription.dosage && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span>Dosage: {prescription.dosage}</span>
+                        </div>
+                      )}
+                      {prescription.frequency && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span>Frequency: {prescription.frequency}</span>
+                        </div>
+                      )}
+                      {expiresSoon && (
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-700">
+                            Expires soon
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href={`/dashboard/prescriptions/${prescription.id}`}>
+                        View Details
+                      </Link>
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Welcome back, {session?.user?.name}
-        </h1>
         <p className="text-muted-foreground">
           Here's what's happening with your health
         </p>
@@ -191,11 +266,10 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {/* Add recent activity items here */}
             <p className="text-sm text-muted-foreground">No recent activity to show.</p>
           </div>
         </CardContent>
       </Card>
     </div>
   );
-} 
+}
