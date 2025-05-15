@@ -24,33 +24,42 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Missing credentials');
         }
 
-        const supabase = createRouteHandlerClient<Database>({ cookies });
-
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: credentials.email,
-          password: credentials.password,
+        // Create the Supabase client with properly awaited cookies
+        const cookieStore = cookies();
+        const supabase = createRouteHandlerClient<Database>({
+          cookies: () => Promise.resolve(cookieStore)
         });
 
-        if (error || !data?.user) {
-          throw new Error(error?.message || 'Invalid credentials');
+        try {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: credentials.email,
+            password: credentials.password,
+          });
+
+          if (error || !data?.user) {
+            throw new Error(error?.message || 'Invalid credentials');
+          }
+
+          const { data: userData } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', data.user.id)
+            .single();
+
+          if (!userData) {
+            throw new Error('User not found');
+          }
+
+          return {
+            id: userData.id,
+            email: userData.email,
+            name: userData.name,
+            is_doctor: userData.is_doctor,
+          };
+        } catch (error) {
+          console.error('Auth error:', error);
+          throw error;
         }
-
-        const { data: userData } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', data.user.id)
-          .single();
-
-        if (!userData) {
-          throw new Error('User not found');
-        }
-
-        return {
-          id: userData.id,
-          email: userData.email,
-          name: userData.name,
-          isDoctor: userData.isDoctor,
-        };
       },
     }),
   ],
@@ -60,7 +69,7 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.email = user.email;
         token.name = user.name;
-        token.isDoctor = user.isDoctor;
+        token.is_doctor = user.is_doctor;
       }
       return token;
     },
@@ -69,7 +78,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id as string;
         session.user.email = token.email as string;
         session.user.name = token.name as string;
-        session.user.isDoctor = token.isDoctor as boolean;
+        session.user.is_doctor = token.is_doctor as boolean;
       }
       return session;
     },
