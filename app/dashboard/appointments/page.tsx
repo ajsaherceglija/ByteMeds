@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import Link from 'next/link';
+import { BookAppointmentModal } from './components/book-appointment-modal';
 
 // Mock data - replace with actual API calls
 const mockAppointments = [
@@ -48,8 +48,9 @@ const mockAppointments = [
 
 export default function AppointmentsPage() {
   const { data: session } = useSession();
-  const isDoctor = session?.user?.isDoctor;
+  const isDoctor = session?.user?.is_doctor;
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
 
   const filteredAppointments = mockAppointments.filter(
     (appointment) =>
@@ -67,10 +68,8 @@ export default function AppointmentsPage() {
             Manage your {isDoctor ? 'patient appointments' : 'medical appointments'}
           </p>
         </div>
-        <Button asChild>
-          <Link href="/dashboard/appointments/new">
-            {isDoctor ? 'Schedule Appointment' : 'Book Appointment'}
-          </Link>
+        <Button onClick={() => setIsBookingModalOpen(true)}>
+          {isDoctor ? 'Schedule Appointment' : 'Book Appointment'}
         </Button>
       </div>
 
@@ -129,9 +128,10 @@ export default function AppointmentsPage() {
                       </div>
                     </div>
                     <Button variant="outline" size="sm" asChild>
-                      <Link href={`/dashboard/appointments/${appointment.id}`}>
+                      {/* Replace Link with Button for new modal */}
+                      <Button onClick={() => setIsBookingModalOpen(true)}>
                         View Details
-                      </Link>
+                      </Button>
                     </Button>
                   </div>
                 ))}
@@ -163,6 +163,11 @@ export default function AppointmentsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <BookAppointmentModal
+        open={isBookingModalOpen}
+        onClose={() => setIsBookingModalOpen(false)}
+      />
     </div>
   );
 } 
