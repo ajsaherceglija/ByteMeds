@@ -349,7 +349,7 @@ export default function MedicalRecordDetailsPage() {
         </Card>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-start">
         <Button onClick={() => setIsUpdateModalOpen(true)}>
           Update Record
         </Button>
