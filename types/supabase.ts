@@ -14,21 +14,21 @@ export interface Database {
           id: string
           email: string
           name: string
-          isDoctor: boolean
+          is_doctor: boolean
           created_at: string
         }
         Insert: {
           id?: string
           email: string
           name: string
-          isDoctor?: boolean
+          is_doctor?: boolean
           created_at?: string
         }
         Update: {
           id?: string
           email?: string
           name?: string
-          isDoctor?: boolean
+          is_doctor?: boolean
           created_at?: string
         }
       }
