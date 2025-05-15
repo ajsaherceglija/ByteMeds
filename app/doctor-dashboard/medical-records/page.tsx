@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { FileText, Search, User, Plus, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,7 @@ const mockMedicalRecords = [
 ];
 
 export default function MedicalRecordsPage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredRecords = mockMedicalRecords.filter(record =>
@@ -67,11 +69,9 @@ export default function MedicalRecordsPage() {
             View and manage patient medical records
           </p>
         </div>
-        <Button asChild>
-          <Link href="/doctor-dashboard/medical-records/new">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Record
-          </Link>
+        <Button onClick={() => router.push('/doctor-dashboard/medical-records/new')}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Record
         </Button>
       </div>
 
