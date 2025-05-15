@@ -84,20 +84,6 @@ export default function MedicationsPage() {
             Manage your medications and prescriptions
           </p>
         </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button>Set Reminders</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Medication Reminders</DialogTitle>
-              <DialogDescription>
-                Configure reminders for your medications
-              </DialogDescription>
-            </DialogHeader>
-            {/* Add reminder configuration form here */}
-          </DialogContent>
-        </Dialog>
       </div>
 
       {/* Active Medications */}
