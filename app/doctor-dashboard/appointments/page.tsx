@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Clock, User, Plus } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,9 +13,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import Link from 'next/link';
 
-// Mock data - replace with actual API calls
+// Mock appointment data
 const mockAppointments = [
   {
     id: 1,
@@ -27,59 +27,19 @@ const mockAppointments = [
   {
     id: 2,
     patientName: 'Jane Smith',
-    date: '2024-03-20T11:00:00Z',
+    date: '2024-03-20T14:30:00Z',
     duration: 45,
     type: 'Follow-up',
     status: 'upcoming',
   },
   {
     id: 3,
-    patientName: 'Alice Brown',
-    date: '2024-03-20T13:30:00Z',
-    duration: 30,
-    type: 'Consultation',
-    status: 'upcoming',
+    patientName: 'Alice Johnson',
+    date: '2024-03-19T09:00:00Z',
+    duration: 60,
+    type: 'Initial Visit',
+    status: 'completed',
   },
-  {
-    id: 4,
-    patientName: 'Robert Wilson',
-    date: '2024-03-20T14:30:00Z',
-    duration: 30,
-    type: 'Check-up',
-    status: 'upcoming',
-  },
-  {
-    id: 5,
-    patientName: 'Emily Davis',
-    date: '2024-03-20T15:30:00Z',
-    duration: 45,
-    type: 'Initial Consultation',
-    status: 'upcoming',
-  },
-  {
-    id: 6,
-    patientName: 'Michael Johnson',
-    date: '2024-03-20T16:30:00Z',
-    duration: 30,
-    type: 'Follow-up',
-    status: 'upcoming',
-  },
-  {
-    id: 7,
-    patientName: 'Sarah Thompson',
-    date: '2024-03-20T17:15:00Z',
-    duration: 30,
-    type: 'Check-up',
-    status: 'upcoming',
-  },
-  {
-    id: 8,
-    patientName: 'David Anderson',
-    date: '2024-03-20T18:00:00Z',
-    duration: 30,
-    type: 'Consultation',
-    status: 'upcoming',
-  }
 ];
 
 export default function AppointmentsPage() {
@@ -103,46 +63,33 @@ export default function AppointmentsPage() {
         </div>
         <Button asChild>
           <Link href="/doctor-dashboard/appointments/new">
-            <Plus className="mr-2 h-4 w-4" />
             Schedule Appointment
           </Link>
         </Button>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-[300px_1fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Calendar</CardTitle>
-            <CardDescription>Select a date to view appointments</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={setSelectedDate}
-              className="rounded-md border"
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              Appointments for {selectedDate ? format(selectedDate, 'PPP') : 'Today'}
-            </CardTitle>
-            <CardDescription>
-              {filteredAppointments.length} appointments scheduled
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {filteredAppointments.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No appointments scheduled for this day.</p>
-              ) : (
-                filteredAppointments.map((appointment) => (
+      <div className="grid gap-6 md:grid-cols-[1fr_300px]">
+        {/* Appointments List */}
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                {selectedDate
+                  ? format(selectedDate, 'MMMM d, yyyy')
+                  : 'Select a date'}
+              </CardTitle>
+              <CardDescription>
+                {filteredAppointments.length
+                  ? `${filteredAppointments.length} appointments scheduled`
+                  : 'No appointments scheduled'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {filteredAppointments.map((appointment) => (
                   <div
                     key={appointment.id}
-                    className="flex items-center justify-between space-x-4 rounded-lg border p-4"
+                    className="flex items-center justify-between rounded-lg border p-4"
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -152,8 +99,7 @@ export default function AppointmentsPage() {
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Clock className="h-4 w-4" />
                         <span>
-                          {format(new Date(appointment.date), 'h:mm a')} (
-                          {appointment.duration} mins)
+                          {format(new Date(appointment.date), 'h:mm a')} ({appointment.duration} mins)
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -177,9 +123,32 @@ export default function AppointmentsPage() {
                       </Link>
                     </Button>
                   </div>
-                ))
-              )}
-            </div>
+                ))}
+                {filteredAppointments.length === 0 && (
+                  <p className="text-center text-sm text-muted-foreground">
+                    No appointments scheduled for this date.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Calendar */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5" />
+              Calendar
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Calendar
+              mode="single"
+              selected={selectedDate}
+              onSelect={setSelectedDate}
+              className="rounded-md border"
+            />
           </CardContent>
         </Card>
       </div>
