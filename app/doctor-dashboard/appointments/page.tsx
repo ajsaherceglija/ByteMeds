@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, Clock, User, Plus } from 'lucide-react';
-import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -12,84 +12,57 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import Link from 'next/link';
+import { Calendar } from '@/components/ui/calendar';
+import { Badge } from '@/components/ui/badge';
 
-// Mock data - replace with actual API calls
+// Mock appointment data
 const mockAppointments = [
   {
-    id: 1,
+    id: '1',
     patientName: 'John Doe',
-    date: '2024-03-20T10:00:00Z',
+    date: new Date('2024-03-25T09:00:00'),
     duration: 30,
     type: 'Check-up',
-    status: 'upcoming',
+    status: 'scheduled',
+    notes: 'Regular check-up appointment'
   },
   {
-    id: 2,
+    id: '2',
     patientName: 'Jane Smith',
-    date: '2024-03-20T11:00:00Z',
+    date: new Date('2024-03-25T10:00:00'),
     duration: 45,
     type: 'Follow-up',
-    status: 'upcoming',
+    status: 'completed',
+    notes: 'Follow-up for previous treatment'
   },
   {
-    id: 3,
-    patientName: 'Alice Brown',
-    date: '2024-03-20T13:30:00Z',
+    id: '3',
+    patientName: 'Alice Johnson',
+    date: new Date('2024-03-26T14:00:00'),
+    duration: 60,
+    type: 'Initial Visit',
+    status: 'scheduled',
+    notes: 'New patient consultation'
+  },
+  {
+    id: '4',
+    patientName: 'Bob Wilson',
+    date: new Date('2024-03-26T15:30:00'),
     duration: 30,
-    type: 'Consultation',
-    status: 'upcoming',
-  },
-  {
-    id: 4,
-    patientName: 'Robert Wilson',
-    date: '2024-03-20T14:30:00Z',
-    duration: 30,
-    type: 'Check-up',
-    status: 'upcoming',
-  },
-  {
-    id: 5,
-    patientName: 'Emily Davis',
-    date: '2024-03-20T15:30:00Z',
-    duration: 45,
-    type: 'Initial Consultation',
-    status: 'upcoming',
-  },
-  {
-    id: 6,
-    patientName: 'Michael Johnson',
-    date: '2024-03-20T16:30:00Z',
-    duration: 30,
-    type: 'Follow-up',
-    status: 'upcoming',
-  },
-  {
-    id: 7,
-    patientName: 'Sarah Thompson',
-    date: '2024-03-20T17:15:00Z',
-    duration: 30,
-    type: 'Check-up',
-    status: 'upcoming',
-  },
-  {
-    id: 8,
-    patientName: 'David Anderson',
-    date: '2024-03-20T18:00:00Z',
-    duration: 30,
-    type: 'Consultation',
-    status: 'upcoming',
+    type: 'Emergency',
+    status: 'cancelled',
+    notes: 'Emergency consultation'
   }
 ];
 
 export default function AppointmentsPage() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [appointments] = useState(mockAppointments);
 
-  const filteredAppointments = mockAppointments.filter(
+  const filteredAppointments = appointments.filter(
     (appointment) =>
       selectedDate &&
-      format(new Date(appointment.date), 'yyyy-MM-dd') ===
-        format(selectedDate, 'yyyy-MM-dd')
+      format(appointment.date, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd')
   );
 
   return (
@@ -109,8 +82,8 @@ export default function AppointmentsPage() {
         </Button>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-[300px_1fr]">
-        <Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="md:sticky md:top-6">
           <CardHeader>
             <CardTitle>Calendar</CardTitle>
             <CardDescription>Select a date to view appointments</CardDescription>
@@ -142,7 +115,7 @@ export default function AppointmentsPage() {
                 filteredAppointments.map((appointment) => (
                   <div
                     key={appointment.id}
-                    className="flex items-center justify-between space-x-4 rounded-lg border p-4"
+                    className="flex items-center justify-between space-x-4 rounded-lg border p-4 hover:bg-accent/50 transition-colors"
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -152,20 +125,22 @@ export default function AppointmentsPage() {
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Clock className="h-4 w-4" />
                         <span>
-                          {format(new Date(appointment.date), 'h:mm a')} (
-                          {appointment.duration} mins)
+                          {format(appointment.date, 'h:mm a')} ({appointment.duration} mins)
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                            appointment.status === 'upcoming'
+                        <Badge
+                          variant="secondary"
+                          className={
+                            appointment.status === 'scheduled'
                               ? 'bg-blue-100 text-blue-700'
-                              : 'bg-green-100 text-green-700'
-                          }`}
+                              : appointment.status === 'completed'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-red-100 text-red-700'
+                          }
                         >
                           {appointment.status}
-                        </span>
+                        </Badge>
                         <span className="text-sm text-muted-foreground">
                           {appointment.type}
                         </span>
