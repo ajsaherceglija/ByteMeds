@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Pencil, X, Check, ArrowLeft } from 'lucide-react';
+import { Pencil, X, Check, ArrowLeft, Plus } from 'lucide-react';
 import Link from 'next/link';
 
 // Mock patient data
@@ -29,6 +29,38 @@ const mockPatientData = {
   address: '123 Main St, Anytown, ST 12345',
   emergencyName: 'Jane Doe',
   emergencyPhone: '+1 234 567 8901',
+  parameters: {
+    current: {
+      weight: '70 kg',
+      bloodPressure: '120/80 mmHg',
+      bloodSugar: '100 mg/dL',
+      heartRate: '72 bpm',
+      lastUpdated: '2024-03-15',
+    },
+    history: [
+      {
+        date: '2024-03-15',
+        weight: '70 kg',
+        bloodPressure: '120/80 mmHg',
+        bloodSugar: '100 mg/dL',
+        heartRate: '72 bpm',
+      },
+      {
+        date: '2024-03-01',
+        weight: '71 kg',
+        bloodPressure: '122/82 mmHg',
+        bloodSugar: '105 mg/dL',
+        heartRate: '75 bpm',
+      },
+      {
+        date: '2024-02-15',
+        weight: '72 kg',
+        bloodPressure: '118/78 mmHg',
+        bloodSugar: '98 mg/dL',
+        heartRate: '70 bpm',
+      },
+    ],
+  },
   medicalHistory: [
     { date: '2024-03-15', condition: 'Hypertension', notes: 'Prescribed medication and lifestyle changes' },
     { date: '2024-02-01', condition: 'Common Cold', notes: 'Prescribed rest and over-the-counter medication' },
@@ -54,6 +86,13 @@ export default function PatientDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [patientData, setPatientData] = useState(mockPatientData);
   const [editedData, setEditedData] = useState(mockPatientData);
+  const [isAddingParameters, setIsAddingParameters] = useState(false);
+  const [newParameters, setNewParameters] = useState({
+    weight: '',
+    bloodPressure: '',
+    bloodSugar: '',
+    heartRate: '',
+  });
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -77,6 +116,25 @@ export default function PatientDetailPage() {
       ...prev,
       [field]: value,
     }));
+  };
+
+  const handleParameterChange = (field: string, value: string) => {
+    setNewParameters(prev => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleSaveParameters = () => {
+    // Here you would make an API call to save the new parameters
+    console.log('Saving new parameters:', newParameters);
+    setIsAddingParameters(false);
+    setNewParameters({
+      weight: '',
+      bloodPressure: '',
+      bloodSugar: '',
+      heartRate: '',
+    });
   };
 
   return (
@@ -235,6 +293,133 @@ export default function PatientDetailPage() {
               ) : (
                 <p>{patientData.emergencyPhone}</p>
               )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Patient Parameters</CardTitle>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsAddingParameters(!isAddingParameters)}
+          >
+            {isAddingParameters ? (
+              <X className="h-4 w-4" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            {/* Current Parameters */}
+            <div className="space-y-4">
+              <h3 className="font-medium">Current Readings</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Weight</Label>
+                  <p>{patientData.parameters.current.weight}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Blood Pressure</Label>
+                  <p>{patientData.parameters.current.bloodPressure}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Blood Sugar</Label>
+                  <p>{patientData.parameters.current.bloodSugar}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Heart Rate</Label>
+                  <p>{patientData.parameters.current.heartRate}</p>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Last updated: {patientData.parameters.current.lastUpdated}
+              </p>
+            </div>
+
+            {/* Add New Parameters Form */}
+            {isAddingParameters && (
+              <div className="space-y-4 border-t pt-4">
+                <h3 className="font-medium">Add New Readings</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Weight (kg)</Label>
+                    <Input
+                      placeholder="e.g., 70"
+                      value={newParameters.weight}
+                      onChange={(e) => handleParameterChange('weight', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Blood Pressure (mmHg)</Label>
+                    <Input
+                      placeholder="e.g., 120/80"
+                      value={newParameters.bloodPressure}
+                      onChange={(e) => handleParameterChange('bloodPressure', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Blood Sugar (mg/dL)</Label>
+                    <Input
+                      placeholder="e.g., 100"
+                      value={newParameters.bloodSugar}
+                      onChange={(e) => handleParameterChange('bloodSugar', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Heart Rate (bpm)</Label>
+                    <Input
+                      placeholder="e.g., 72"
+                      value={newParameters.heartRate}
+                      onChange={(e) => handleParameterChange('heartRate', e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsAddingParameters(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSaveParameters}>Save Readings</Button>
+                </div>
+              </div>
+            )}
+
+            {/* Parameters History */}
+            <div className="space-y-4 border-t pt-4">
+              <h3 className="font-medium">History</h3>
+              <div className="space-y-4">
+                {patientData.parameters.history.map((record, index) => (
+                  <div key={index} className="rounded-lg border p-4">
+                    <div className="mb-2 font-medium">{record.date}</div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Weight: </span>
+                        {record.weight}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Blood Pressure: </span>
+                        {record.bloodPressure}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Blood Sugar: </span>
+                        {record.bloodSugar}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Heart Rate: </span>
+                        {record.heartRate}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </CardContent>
