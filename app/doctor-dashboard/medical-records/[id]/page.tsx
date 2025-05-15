@@ -26,18 +26,7 @@ const mockMedicalRecords = [
       age: 35,
       contact: '+1 234-567-8900',
       email: 'john.doe@email.com'
-    },
-    results: {
-      bloodPressure: '120/80',
-      heartRate: '72 bpm',
-      temperature: '98.6°F',
-      bloodSugar: '95 mg/dL'
-    },
-    doctorNotes: 'All results within normal range. Follow-up in 6 months.',
-    attachments: [
-      { name: 'Blood Work Report.pdf', type: 'PDF', size: '2.4 MB' },
-      { name: 'Lab Analysis.pdf', type: 'PDF', size: '1.8 MB' }
-    ]
+    }
   },
   {
     id: 2,
@@ -50,15 +39,7 @@ const mockMedicalRecords = [
       age: 28,
       contact: '+1 234-567-8901',
       email: 'jane.smith@email.com'
-    },
-    results: {
-      findings: 'Awaiting radiologist report',
-      preliminaryNotes: 'Initial scan completed'
-    },
-    doctorNotes: 'Awaiting final analysis from radiology department',
-    attachments: [
-      { name: 'Chest X-ray.jpg', type: 'Image', size: '5.2 MB' }
-    ]
+    }
   }
 ];
 
@@ -164,58 +145,6 @@ export default function MedicalRecordDetailsPage() {
               <p className="text-sm text-muted-foreground">
                 {record.patientDetails.email}
               </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Results & Notes</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {record.results && (
-              <div>
-                <p className="text-sm font-medium">Results</p>
-                {Object.entries(record.results).map(([key, value]) => (
-                  <div key={key} className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{key}:</span>
-                    <span>{value}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div>
-              <p className="text-sm font-medium">Doctor's Notes</p>
-              <p className="text-sm text-muted-foreground">{record.doctorNotes}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Attachments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {record.attachments.map((attachment, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between rounded-lg border p-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm font-medium">{attachment.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {attachment.type} • {attachment.size}
-                      </p>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    Download
-                  </Button>
-                </div>
-              ))}
             </div>
           </CardContent>
         </Card>

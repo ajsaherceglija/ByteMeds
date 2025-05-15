@@ -45,7 +45,7 @@ const mockMedicalRecords = [
     recordType: 'Treatment Plan',
     date: '2024-03-10T09:00:00Z',
     description: 'Physiotherapy schedule',
-    status: 'active',
+    status: 'pending',
   },
 ];
 
@@ -132,9 +132,7 @@ export default function MedicalRecordsPage() {
                       className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
                         record.status === 'completed'
                           ? 'bg-green-100 text-green-700'
-                          : record.status === 'pending'
-                          ? 'bg-yellow-100 text-yellow-700'
-                          : 'bg-blue-100 text-blue-700'
+                          : 'bg-yellow-100 text-yellow-700'
                       }`}
                     >
                       {record.status}
