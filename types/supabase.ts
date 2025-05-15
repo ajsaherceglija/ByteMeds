@@ -9,6 +9,41 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      profiles: {
+        Row: {
+          id: string
+          date_of_birth: string | null 
+          gender: string | null
+          address: string | null
+          city: string | null
+          country: string | null
+          blood_type: string | null
+          emergency_contact: string | null
+          updated_at: string
+        }
+        Insert: {
+          id: string 
+          date_of_birth?: string | null
+          gender?: string | null
+          address?: string | null
+          city?: string | null
+          country?: string | null
+          blood_type?: string | null
+          emergency_contact?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          date_of_birth?: string | null
+          gender?: string | null
+          address?: string | null
+          city?: string | null
+          country?: string | null
+          blood_type?: string | null
+          emergency_contact?: string | null
+          updated_at?: string
+        }
+      }      
       users: {
         Row: {
           id: string
@@ -38,7 +73,7 @@ export interface Database {
           patient_id: string
           doctor_id: string
           date: string
-          status: 'scheduled' | 'completed' | 'cancelled'
+          is_active: boolean
           notes: string | null
           created_at: string
         }
@@ -47,7 +82,7 @@ export interface Database {
           patient_id: string
           doctor_id: string
           date: string
-          status?: 'scheduled' | 'completed' | 'cancelled'
+          is_active: true
           notes?: string | null
           created_at?: string
         }
@@ -56,7 +91,7 @@ export interface Database {
           patient_id?: string
           doctor_id?: string
           date?: string
-          status?: 'scheduled' | 'completed' | 'cancelled'
+          is_active: boolean
           notes?: string | null
           created_at?: string
         }
