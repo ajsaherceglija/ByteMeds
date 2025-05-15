@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select';
 import { Pencil, X, Check, ArrowLeft, Plus } from 'lucide-react';
 import Link from 'next/link';
+import { Switch } from "@/components/ui/switch";
 
 // Mock patient data
 const mockPatientData = {
@@ -29,6 +30,7 @@ const mockPatientData = {
   address: '123 Main St, Anytown, ST 12345',
   emergencyName: 'Jane Doe',
   emergencyPhone: '+1 234 567 8901',
+  isActive: true,
   parameters: {
     current: {
       weight: '70 kg',
@@ -137,6 +139,21 @@ export default function PatientDetailPage() {
     });
   };
 
+  const handleActiveStatusChange = async (checked: boolean) => {
+    try {
+      // Here you would make an API call to update the patient's active status
+      console.log('Updating patient active status:', checked);
+      
+      // Update local state
+      setPatientData(prev => ({
+        ...prev,
+        isActive: checked,
+      }));
+    } catch (error) {
+      console.error('Error updating patient status:', error);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -150,7 +167,20 @@ export default function PatientDetailPage() {
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Patient Information</CardTitle>
+          <div className="space-y-1">
+            <CardTitle>Patient Information</CardTitle>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Status:</span>
+              <Switch
+                checked={patientData.isActive}
+                onCheckedChange={handleActiveStatusChange}
+                className="data-[state=checked]:bg-green-600"
+              />
+              <span className="text-sm font-medium">
+                {patientData.isActive ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+          </div>
           {!isEditing ? (
             <Button variant="ghost" size="icon" onClick={handleEdit}>
               <Pencil className="h-4 w-4" />

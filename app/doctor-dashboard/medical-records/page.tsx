@@ -20,6 +20,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import Link from 'next/link';
 
 // Mock data - replace with actual API calls
@@ -31,6 +38,7 @@ const mockMedicalRecords = [
     date: '2024-03-15T10:00:00Z',
     description: 'Blood work analysis',
     status: 'completed',
+    isActive: true,
   },
   {
     id: 2,
@@ -39,6 +47,7 @@ const mockMedicalRecords = [
     date: '2024-03-14T14:30:00Z',
     description: 'Chest X-ray results',
     status: 'pending',
+    isActive: true,
   },
   {
     id: 3,
@@ -47,18 +56,28 @@ const mockMedicalRecords = [
     date: '2024-03-10T09:00:00Z',
     description: 'Physiotherapy schedule',
     status: 'pending',
+    isActive: false,
   },
 ];
 
 export default function MedicalRecordsPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
+  const [patientStatus, setPatientStatus] = useState<'all' | 'active' | 'inactive'>('all');
 
-  const filteredRecords = mockMedicalRecords.filter(record =>
-    record.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    record.recordType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    record.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredRecords = mockMedicalRecords.filter(record => {
+    const matchesSearch = 
+      record.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      record.recordType.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      record.description.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesStatus = 
+      patientStatus === 'all' || 
+      (patientStatus === 'active' && record.isActive) ||
+      (patientStatus === 'inactive' && !record.isActive);
+
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="space-y-6">
@@ -69,10 +88,25 @@ export default function MedicalRecordsPage() {
             View and manage patient medical records
           </p>
         </div>
-        <Button onClick={() => router.push('/doctor-dashboard/medical-records/new')}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Record
-        </Button>
+        <div className="flex items-center gap-4">
+          <Select
+            value={patientStatus}
+            onValueChange={(value: 'all' | 'active' | 'inactive') => setPatientStatus(value)}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Select patient status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Patients</SelectItem>
+              <SelectItem value="active">Active Patients</SelectItem>
+              <SelectItem value="inactive">Inactive Patients</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={() => router.push('/doctor-dashboard/medical-records/new')}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Record
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -102,6 +136,7 @@ export default function MedicalRecordsPage() {
                 <TableHead>Date</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Patient Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -136,6 +171,17 @@ export default function MedicalRecordsPage() {
                       }`}
                     >
                       {record.status}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                        record.isActive
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      {record.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </TableCell>
                   <TableCell className="text-right">
