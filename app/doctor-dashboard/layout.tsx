@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { UserNav } from '../../components/layout/user-nav';
 
 const navItems = [
   { href: '/doctor-dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -71,6 +72,11 @@ export default function DoctorDashboardLayout({
               );
             })}
           </nav>
+
+          {/* User Profile */}
+          <div className="mt-auto border-t p-4 z-50">
+            <UserNav />
+          </div>
         </div>
       </aside>
 
