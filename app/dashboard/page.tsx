@@ -24,8 +24,8 @@ import { format } from 'date-fns';
 
 // Mock data for patient dashboard
 const mockPatientStats = {
-  upcomingAppointments: 2,
-  activeMedications: 3,
+  activeAppointments: 2,
+  favoriteDoctor: 'Dr. John Doe',
   recentParameters: {
     weight: '75 kg',
     bloodPressure: '120/80',
@@ -221,19 +221,19 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle>All Appointments</CardTitle>
+            <CardTitle>Active Appointments</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{mockPatientStats.upcomingAppointments}</p>
+            <p className="text-2xl font-bold">{mockPatientStats.activeAppointments}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Active Medications</CardTitle>
+            <CardTitle>Favorite Doctor</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{mockPatientStats.activeMedications}</p>
+            <p className="text-2xl font-bold">{mockPatientStats.favoriteDoctor}</p>
           </CardContent>
         </Card>
 
@@ -246,17 +246,6 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
-
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Health Trends</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[300px]">
-            <LineChart data={mockData} />
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Recent Activity */}
       <Card>

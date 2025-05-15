@@ -297,9 +297,9 @@ export default function ParametersPage() {
                 
                 <Tooltip
                   labelFormatter={(date) => ""}
-                  formatter={(value: number, name) => [
+                  formatter={(value: number, name: string) => [
                     `${value} mmHg`,
-                    name === 'systolic' ? 'Systolic' : 'Diastolic',
+                    name.toLowerCase() === 'systolic' ? 'Systolic' : 'Diastolic',
                   ]}
                 />
                 {parameters.bloodPressureSystolic && (
