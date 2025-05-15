@@ -15,14 +15,7 @@ import {
 import Link from 'next/link';
 import { LineChart } from '../../components/charts/line-chart';
 
-// Mock data - replace with actual API calls
-const mockDoctorStats = {
-  totalPatients: 150,
-  appointmentsToday: 8,
-  pendingPrescriptions: 5,
-  recentRecords: 12,
-};
-
+// Mock data for patient dashboard
 const mockPatientStats = {
   upcomingAppointments: 2,
   activeMedications: 3,
@@ -44,7 +37,6 @@ const mockData = [
 
 export default function DashboardPage() {
   const { data: session } = useSession();
-  const isDoctor = session?.user?.isDoctor;
 
   return (
     <div className="space-y-6">
@@ -53,70 +45,60 @@ export default function DashboardPage() {
           Welcome back, {session?.user?.name}
         </h1>
         <p className="text-muted-foreground">
-          Here's what's happening with your {isDoctor ? 'patients' : 'health'}
+          Here's what's happening with your health
         </p>
       </div>
 
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-4">
         <Button asChild>
-          <Link href={isDoctor ? '/dashboard/appointments/new' : '/dashboard/appointments'}>
+          <Link href="/dashboard/appointments">
             <Plus className="mr-2 h-4 w-4" />
-            {isDoctor ? 'New Appointment' : 'Book Appointment'}
+            Book Appointment
           </Link>
         </Button>
-        {isDoctor && (
-          <Button asChild variant="secondary">
-            <Link href="/dashboard/prescriptions/new">
-              <Plus className="mr-2 h-4 w-4" />
-              New Prescription
-            </Link>
-          </Button>
-        )}
       </div>
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle>{isDoctor ? 'Total Patients' : 'Upcoming Appointments'}</CardTitle>
+            <CardTitle>Upcoming Appointments</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{isDoctor ? mockDoctorStats.totalPatients : mockPatientStats.upcomingAppointments}</p>
+            <p className="text-2xl font-bold">{mockPatientStats.upcomingAppointments}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>{isDoctor ? 'Today\'s Appointments' : 'Pending Prescriptions'}</CardTitle>
+            <CardTitle>Active Medications</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{isDoctor ? mockDoctorStats.appointmentsToday : mockDoctorStats.pendingPrescriptions}</p>
+            <p className="text-2xl font-bold">{mockPatientStats.activeMedications}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>{isDoctor ? 'Pending Reports' : 'Next Check-up'}</CardTitle>
+            <CardTitle>Next Check-up</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{isDoctor ? mockDoctorStats.recentRecords : mockPatientStats.lastCheckup}</p>
+            <p className="text-2xl font-bold">{mockPatientStats.lastCheckup}</p>
           </CardContent>
         </Card>
       </div>
 
-      {!isDoctor && (
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Health Trends</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <LineChart data={mockData} />
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Health Trends</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[300px]">
+            <LineChart data={mockData} />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Recent Activity */}
       <Card>

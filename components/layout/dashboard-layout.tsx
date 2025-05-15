@@ -40,7 +40,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  const navItems = session?.user?.isDoctor ? doctorNavItems : patientNavItems;
+  const navItems = session?.user?.is_doctor ? doctorNavItems : patientNavItems;
 
   return (
     <div className="min-h-screen">

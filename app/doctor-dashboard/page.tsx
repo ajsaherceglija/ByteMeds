@@ -1,28 +1,36 @@
 'use client';
 
-import { Stethoscope, Calendar, Users, FileText, Plus } from 'lucide-react';
-import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+} from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
+import {
+  Plus,
+} from 'lucide-react';
+import Link from 'next/link';
 
-// Mock data - replace with actual API calls
+// Mock data for doctor dashboard
 const mockDoctorStats = {
   totalPatients: 150,
   appointmentsToday: 8,
-  pendingReports: 12,
+  pendingPrescriptions: 5,
+  recentRecords: 12,
 };
 
-export default function DoctorDashboard() {
+export default function DoctorDashboardPage() {
+  const { data: session } = useSession();
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Welcome back, Dr. Smith</h1>
+        <h1 className="text-3xl font-bold tracking-tight">
+          Welcome back, Dr. {session?.user?.name}
+        </h1>
         <p className="text-muted-foreground">
           Here's what's happening with your patients
         </p>
@@ -36,21 +44,19 @@ export default function DoctorDashboard() {
             New Appointment
           </Link>
         </Button>
+        <Button asChild variant="secondary">
+          <Link href="/doctor-dashboard/prescriptions/new">
+            <Plus className="mr-2 h-4 w-4" />
+            New Prescription
+          </Link>
+        </Button>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
-            <div className="flex items-center space-x-4">
-              <div className="p-2 bg-secondary rounded-full">
-                <Users className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle>Total Patients</CardTitle>
-                <CardDescription>Overall patient count</CardDescription>
-              </div>
-            </div>
+            <CardTitle>Total Patients</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">{mockDoctorStats.totalPatients}</p>
@@ -59,15 +65,7 @@ export default function DoctorDashboard() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center space-x-4">
-              <div className="p-2 bg-secondary rounded-full">
-                <Calendar className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle>Today's Appointments</CardTitle>
-                <CardDescription>Scheduled for today</CardDescription>
-              </div>
-            </div>
+            <CardTitle>Today's Appointments</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">{mockDoctorStats.appointmentsToday}</p>
@@ -76,21 +74,27 @@ export default function DoctorDashboard() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center space-x-4">
-              <div className="p-2 bg-secondary rounded-full">
-                <FileText className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle>Pending Reports</CardTitle>
-                <CardDescription>Reports awaiting review</CardDescription>
-              </div>
-            </div>
+            <CardTitle>Pending Reports</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{mockDoctorStats.pendingReports}</p>
+            <p className="text-2xl font-bold">{mockDoctorStats.recentRecords}</p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Recent Activity */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Activity</CardTitle>
+          <CardDescription>Your latest patient interactions</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* Add recent activity items here */}
+            <p className="text-sm text-muted-foreground">No recent activity to show.</p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 } 
