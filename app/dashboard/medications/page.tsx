@@ -34,9 +34,12 @@ import { toast } from 'sonner';
 
 type PrescriptionMedication = {
   id: string;
-  name: string;
-  description: string | null;
-  side_effects: string | null;
+  medication: {
+    id: string;
+    name: string;
+    description: string | null;
+    side_effects: string | null;
+  };
   prescription: {
     id: string;
     created_at: string;
@@ -55,6 +58,7 @@ type DatabasePrescription = {
   valid_until: string | null;
   status: string | null;
   prescription_medications: {
+    id: string;
     dosage: string | null;
     frequency: string | null;
     medications: {
@@ -133,6 +137,7 @@ export default function MedicationsPage() {
             description,
             side_effects,
             prescription_medications!inner (
+              id,
               dosage,
               frequency,
               prescription:prescriptions!inner (
@@ -155,10 +160,13 @@ export default function MedicationsPage() {
 
         // Transform the data structure
         const transformedActiveData = (activeData || []).map(medication => ({
-          id: medication.id,
-          name: medication.name,
-          description: medication.description,
-          side_effects: medication.side_effects,
+          id: medication.prescription_medications[0]?.id,
+          medication: {
+            id: medication.id,
+            name: medication.name,
+            description: medication.description,
+            side_effects: medication.side_effects,
+          },
           prescription: medication.prescription_medications[0]?.prescription,
           prescription_medications: [{
             dosage: medication.prescription_medications[0]?.dosage,
@@ -168,47 +176,59 @@ export default function MedicationsPage() {
 
         console.log('Active medications:', transformedActiveData);
 
-        // Get completed prescriptions
+        // Get medications from non-active prescriptions
         const { data: historyData, error: historyError } = await supabase
-          .from('medications')
+          .from('prescriptions')
           .select(`
             id,
-            name,
-            description,
-            side_effects,
-            prescription_medications!inner (
+            created_at,
+            valid_until,
+            status,
+            prescription_medications (
+              id,
               dosage,
               frequency,
-              prescription:prescriptions!inner (
+              medications (
                 id,
-                created_at,
-                valid_until,
-                status,
-                patient_id
+                name,
+                description,
+                side_effects
               )
             )
           `)
-          .eq('prescription_medications.prescription.patient_id', session.user.id)
-          .eq('prescription_medications.prescription.status', 'completed')
-          .returns<any[]>();
+          .eq('patient_id', session.user.id)
+          .neq('status', 'active')
+          .returns<DatabasePrescription[]>();
 
         if (historyError) {
           console.error('History prescriptions error:', historyError);
           throw historyError;
         }
 
-        // Transform the history data
-        const transformedHistoryData = (historyData || []).map(medication => ({
-          id: medication.id,
-          name: medication.name,
-          description: medication.description,
-          side_effects: medication.side_effects,
-          prescription: medication.prescription_medications[0]?.prescription,
-          prescription_medications: [{
-            dosage: medication.prescription_medications[0]?.dosage,
-            frequency: medication.prescription_medications[0]?.frequency
-          }]
-        }));
+        // Transform the history data to match the expected format
+        const transformedHistoryData: PrescriptionMedication[] = (historyData || []).flatMap(prescription => 
+          (prescription.prescription_medications || [])
+            .filter(pm => pm.medications) // Ensure medication exists
+            .map(pm => ({
+              id: pm.id,
+              medication: {
+                id: pm.medications.id,
+                name: pm.medications.name,
+                description: pm.medications.description,
+                side_effects: pm.medications.side_effects,
+              },
+              prescription: {
+                id: prescription.id,
+                created_at: prescription.created_at,
+                valid_until: prescription.valid_until,
+                status: prescription.status
+              },
+              prescription_medications: [{
+                dosage: pm.dosage,
+                frequency: pm.frequency
+              }]
+            }))
+        );
 
         console.log('History medications:', transformedHistoryData);
 
@@ -256,7 +276,7 @@ export default function MedicationsPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle>{medication.name}</CardTitle>
+                    <CardTitle>{medication.medication.name}</CardTitle>
                     <CardDescription>
                       {medication.prescription_medications[0]?.dosage} - {medication.prescription_medications[0]?.frequency}
                     </CardDescription>
@@ -289,18 +309,18 @@ export default function MedicationsPage() {
                       </div>
                     )}
                   </div>
-                  {(medication.description || medication.side_effects) && (
+                  {(medication.medication.description || medication.medication.side_effects) && (
                     <div className="rounded-lg bg-muted p-3 text-sm">
-                      {medication.description && (
+                      {medication.medication.description && (
                         <>
                           <p className="font-medium">Description:</p>
-                          <p className="text-muted-foreground">{medication.description}</p>
+                          <p className="text-muted-foreground">{medication.medication.description}</p>
                         </>
                       )}
-                      {medication.side_effects && (
+                      {medication.medication.side_effects && (
                         <>
                           <p className="font-medium mt-2">Side Effects:</p>
-                          <p className="text-muted-foreground">{medication.side_effects}</p>
+                          <p className="text-muted-foreground">{medication.medication.side_effects}</p>
                         </>
                       )}
                     </div>
@@ -337,7 +357,7 @@ export default function MedicationsPage() {
               <TableBody>
                 {historyMedications.map((medication) => (
                   <TableRow key={medication.id}>
-                    <TableCell className="font-medium">{medication.name}</TableCell>
+                    <TableCell className="font-medium">{medication.medication.name}</TableCell>
                     <TableCell>{medication.prescription_medications[0]?.dosage}</TableCell>
                     <TableCell>{medication.prescription_medications[0]?.frequency}</TableCell>
                     <TableCell>
@@ -348,7 +368,7 @@ export default function MedicationsPage() {
                     </TableCell>
                     <TableCell>
                       <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">
-                        Completed
+                        {medication.prescription.status}
                       </span>
                     </TableCell>
                   </TableRow>
