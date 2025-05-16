@@ -238,4 +238,98 @@ export async function createPatient(formData: {
   if (relationshipError) throw relationshipError;
 
   return { success: true, patientId: newUserId };
+}
+
+export type Doctor = {
+  id: string;
+  name: string;
+  specialty: string | null;
+  hospital: string | null;
+};
+
+export async function getDoctors(): Promise<Doctor[]> {
+  const cookieStore = cookies();
+  const supabase = createServerComponentClient<Database>({ cookies: () => cookieStore });
+
+  // Get the current user's ID
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data: doctors, error } = await supabase
+    .from('doctors')
+    .select(`
+      id,
+      specialty,
+      hospital,
+      users (
+        name
+      )
+    `)
+    .neq('id', user.id); // Exclude current doctor
+
+  if (error) throw error;
+  if (!doctors) return [];
+
+  return doctors.map(doctor => ({
+    id: doctor.id,
+    name: (doctor.users as any).name,
+    specialty: doctor.specialty,
+    hospital: doctor.hospital
+  }));
+}
+
+export async function sharePatient(patientId: string, doctorIds: string[]) {
+  const cookieStore = cookies();
+  const supabase = createServerComponentClient<Database>({ cookies: () => cookieStore });
+
+  // Get the current user's ID
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const now = new Date().toISOString();
+
+  // First, delete any existing shared relationships for this patient
+  const { error: deleteError } = await supabase
+    .from('doctor_patient_relationships')
+    .delete()
+    .eq('patient_id', patientId)
+    .eq('relationship_type', 'shared');
+
+  if (deleteError) throw deleteError;
+
+  // Then create new relationships for each selected doctor
+  const relationships = doctorIds.map(doctorId => ({
+    doctor_id: doctorId,
+    patient_id: patientId,
+    relationship_type: 'shared',
+    started_at: now
+  }));
+
+  const { error } = await supabase
+    .from('doctor_patient_relationships')
+    .insert(relationships);
+
+  if (error) throw error;
+
+  return { success: true };
+}
+
+export async function getSharedDoctors(patientId: string): Promise<string[]> {
+  const cookieStore = cookies();
+  const supabase = createServerComponentClient<Database>({ cookies: () => cookieStore });
+
+  // Get the current user's ID
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data: relationships, error } = await supabase
+    .from('doctor_patient_relationships')
+    .select('doctor_id')
+    .eq('patient_id', patientId)
+    .eq('relationship_type', 'shared');
+
+  if (error) throw error;
+  if (!relationships) return [];
+
+  return relationships.map(rel => rel.doctor_id);
 } 
