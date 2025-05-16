@@ -185,10 +185,47 @@ export async function POST(request: Request) {
     }
 
     try {
+      // Handle image if present
+      let imageAnalysis = '';
+      if (image) {
+        try {
+          // Convert image to base64
+          const bytes = await image.arrayBuffer();
+          const buffer = Buffer.from(bytes);
+          const base64Image = buffer.toString('base64');
+
+          // Analyze image with OpenAI Vision
+          const imageResponse = await openai.chat.completions.create({
+            model: "gpt-4-vision-preview",
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: "Analyze this medical image and describe any relevant findings. Focus on visible symptoms, abnormalities, or concerning features." },
+                  {
+                    type: "image_url",
+                    image_url: {
+                      url: `data:${image.type};base64,${base64Image}`
+                    }
+                  }
+                ],
+              },
+            ],
+            max_tokens: 500,
+          });
+
+          imageAnalysis = imageResponse.choices[0]?.message?.content || '';
+        } catch (imageError) {
+          console.error('Error analyzing image:', imageError);
+          // Continue with text analysis even if image analysis fails
+        }
+      }
+
       // Prepare the prompt for ChatGPT
-      const prompt = `As a senior medical consultant with extensive clinical experience, provide a comprehensive medical analysis of the following symptoms. Your response must be in JSON format with the specified fields. This analysis will be used by healthcare providers to make clinical decisions.
+      const prompt = `As a senior medical consultant with extensive clinical experience, provide a comprehensive medical analysis of the following symptoms${imageAnalysis ? ' and image findings' : ''}. Your response must be in JSON format with the specified fields. This analysis will be used by healthcare providers to make clinical decisions.
 
 Symptoms: ${symptoms}
+${imageAnalysis ? `\nImage Analysis: ${imageAnalysis}` : ''}
 
 Please provide a detailed clinical analysis considering:
 
@@ -417,37 +454,6 @@ Respond in this exact JSON format:
   }]
 }`;
 
-      // If there's an image, analyze it first
-      let imageAnalysis = '';
-      if (image) {
-        const imageBuffer = await image.arrayBuffer();
-        const base64Image = Buffer.from(imageBuffer).toString('base64');
-
-        const imageResponse = await openai.chat.completions.create({
-          model: "gpt-3.5-turbo",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { 
-                  type: "text", 
-                  text: "As a medical imaging expert, provide a detailed clinical analysis of this image. Focus on:\n1. Visible anatomical structures and their condition\n2. Any pathological findings or abnormalities\n3. Quality and diagnostic value of the image\n4. Additional views or imaging modalities needed\n5. Specific measurements or features to note\n6. Comparison with normal findings\nProvide a detailed medical analysis using proper medical terminology." 
-                },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:${image.type};base64,${base64Image}`,
-                  },
-                },
-              ],
-            },
-          ],
-          max_tokens: 1000,
-        });
-
-        imageAnalysis = imageResponse.choices[0].message.content || '';
-      }
-
       // Get the final analysis
       const completion = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
@@ -458,9 +464,7 @@ Respond in this exact JSON format:
           },
           {
             role: "user",
-            content: imageAnalysis 
-              ? `${prompt}\n\nAdditional image analysis: ${imageAnalysis}`
-              : prompt,
+            content: prompt,
           },
         ],
         response_format: { type: "json_object" },

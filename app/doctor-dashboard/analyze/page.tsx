@@ -446,10 +446,22 @@ export default function AnalyzePage() {
       const formData = new FormData();
       formData.append('symptoms', symptoms);
       if (image) {
+        // Validate image size (max 10MB)
+        if (image.size > 10 * 1024 * 1024) {
+          toast.error('Image size should be less than 10MB');
+          setIsAnalyzing(false);
+          return;
+        }
+        // Validate image type
+        if (!image.type.startsWith('image/')) {
+          toast.error('Please upload a valid image file');
+          setIsAnalyzing(false);
+          return;
+        }
         formData.append('image', image);
       }
       formData.append('doctorId', session.user.id);
-      formData.append('patientId', session.user.id); // For now, using doctor's ID as patient ID
+      formData.append('patientId', session.user.id);
 
       const response = await fetch('/api/doctor/analyze', {
         method: 'POST',
@@ -470,7 +482,7 @@ export default function AnalyzePage() {
       toast.success('Analysis completed successfully');
     } catch (error: any) {
       console.error('Analysis error:', error);
-      toast.error(error.message || 'Failed to analyze symptoms');
+      toast.error(error.message || 'Failed to analyze symptoms. Please try again in a few minutes.');
       setResult(null);
     } finally {
       setIsAnalyzing(false);
@@ -651,7 +663,7 @@ export default function AnalyzePage() {
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    {result.description}
+                    {result.description || 'No description available'}
                   </p>
                 </div>
 
@@ -663,7 +675,7 @@ export default function AnalyzePage() {
                       <div>
                         <h4 className="font-medium mb-2">Primary Symptoms</h4>
                         <ul className="list-disc pl-4">
-                          {result.clinicalAssessment.primarySymptoms.map((symptom, index) => (
+                          {(result.clinicalAssessment.primarySymptoms || []).map((symptom, index) => (
                             <li key={index}>{symptom}</li>
                           ))}
                         </ul>
@@ -672,7 +684,7 @@ export default function AnalyzePage() {
                       <div>
                         <h4 className="font-medium mb-2">Associated Symptoms</h4>
                         <ul className="list-disc pl-4">
-                          {result.clinicalAssessment.associatedSymptoms.map((symptom, index) => (
+                          {(result.clinicalAssessment.associatedSymptoms || []).map((symptom, index) => (
                             <li key={index}>{symptom}</li>
                           ))}
                         </ul>
@@ -681,11 +693,11 @@ export default function AnalyzePage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <h4 className="font-medium mb-2">Duration</h4>
-                          <p>{result.clinicalAssessment.duration}</p>
+                          <p>{result.clinicalAssessment.duration || 'Not specified'}</p>
                         </div>
                         <div>
                           <h4 className="font-medium mb-2">Progression</h4>
-                          <p>{result.clinicalAssessment.progression}</p>
+                          <p>{result.clinicalAssessment.progression || 'Not specified'}</p>
                         </div>
                       </div>
 
@@ -693,7 +705,7 @@ export default function AnalyzePage() {
                         <div>
                           <h4 className="font-medium mb-2">Aggravating Factors</h4>
                           <ul className="list-disc pl-4">
-                            {result.clinicalAssessment.aggravatingFactors.map((factor, index) => (
+                            {(result.clinicalAssessment.aggravatingFactors || []).map((factor, index) => (
                               <li key={index}>{factor}</li>
                             ))}
                           </ul>
@@ -701,7 +713,7 @@ export default function AnalyzePage() {
                         <div>
                           <h4 className="font-medium mb-2">Relieving Factors</h4>
                           <ul className="list-disc pl-4">
-                            {result.clinicalAssessment.relievingFactors.map((factor, index) => (
+                            {(result.clinicalAssessment.relievingFactors || []).map((factor, index) => (
                               <li key={index}>{factor}</li>
                             ))}
                           </ul>
@@ -709,41 +721,12 @@ export default function AnalyzePage() {
                       </div>
 
                       <div>
-                        <h4 className="font-medium mb-2">Red Flags</h4>
-                        <div className="space-y-2">
-                          {result.clinicalAssessment.redFlags.map((flag, index) => (
-                            <Alert key={index} variant="destructive">
-                              <AlertTitle>{flag.sign}</AlertTitle>
-                              <AlertDescription>
-                                <div className="space-y-1">
-                                  <p><strong>Clinical Criteria:</strong> {flag.clinicalCriteria}</p>
-                                  <p><strong>Time Sensitivity:</strong> {flag.timeSensitivity}</p>
-                                  <p><strong>Required Action:</strong> {flag.requiredAction}</p>
-                                  <p><strong>Rationale:</strong> {flag.rationale}</p>
-                                  <div>
-                                    <strong>Potential Complications:</strong>
-                                    <ul className="list-disc pl-4">
-                                      {flag.potentialComplications.map((complication, i) => (
-                                        <li key={i}>{complication}</li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                  <p><strong>Monitoring Frequency:</strong> {flag.monitoringFrequency}</p>
-                                  <p><strong>Escalation Criteria:</strong> {flag.escalationCriteria}</p>
-                                </div>
-                              </AlertDescription>
-                            </Alert>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
                         <h4 className="font-medium mb-2">Vital Signs</h4>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                          {Object.entries(result.clinicalAssessment.vitalSigns).map(([key, value]) => (
+                          {result.clinicalAssessment.vitalSigns && Object.entries(result.clinicalAssessment.vitalSigns).map(([key, value]) => (
                             <div key={key} className="p-2 bg-muted rounded-lg">
                               <p className="text-sm font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
-                              <p className="text-sm">{value}</p>
+                              <p className="text-sm">{value || 'Not measured'}</p>
                             </div>
                           ))}
                         </div>
@@ -752,13 +735,13 @@ export default function AnalyzePage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <h4 className="font-medium mb-2">Severity Score</h4>
-                          <Progress value={result.clinicalAssessment.severityScore * 10} className="w-full" />
-                          <p className="text-sm mt-1">{result.clinicalAssessment.severityScore}/10</p>
+                          <Progress value={(result.clinicalAssessment.severityScore || 0) * 10} className="w-full" />
+                          <p className="text-sm mt-1">{result.clinicalAssessment.severityScore || 0}/10</p>
                         </div>
                         <div>
                           <h4 className="font-medium mb-2">Pain Scale</h4>
-                          <Progress value={result.clinicalAssessment.painScale * 10} className="w-full" />
-                          <p className="text-sm mt-1">{result.clinicalAssessment.painScale}/10</p>
+                          <Progress value={(result.clinicalAssessment.painScale || 0) * 10} className="w-full" />
+                          <p className="text-sm mt-1">{result.clinicalAssessment.painScale || 0}/10</p>
                         </div>
                       </div>
                     </div>
@@ -768,7 +751,51 @@ export default function AnalyzePage() {
                 {/* Differential Diagnosis */}
                 <div className="space-y-4">
                   <h3 className="font-semibold">Differential Diagnosis</h3>
-                  {renderSectionContent(result.differentialDiagnosis, 'No differential diagnosis available')}
+                  {result.differentialDiagnosis && (
+                    <div className="space-y-4">
+                      {result.differentialDiagnosis.mostLikely && result.differentialDiagnosis.mostLikely.length > 0 && (
+                        <div>
+                          <h4 className="font-medium mb-2">Most Likely Diagnoses</h4>
+                          <ul className="list-disc pl-4">
+                            {result.differentialDiagnosis.mostLikely.map((diagnosis: any, index: number) => (
+                              <li key={index}>
+                                {typeof diagnosis === 'string' ? diagnosis : diagnosis.condition}
+                                {diagnosis.probability && ` (${diagnosis.probability})`}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {result.differentialDiagnosis.alternatives && result.differentialDiagnosis.alternatives.length > 0 && (
+                        <div>
+                          <h4 className="font-medium mb-2">Alternative Diagnoses</h4>
+                          <ul className="list-disc pl-4">
+                            {result.differentialDiagnosis.alternatives.map((diagnosis: any, index: number) => (
+                              <li key={index}>
+                                {typeof diagnosis === 'string' ? diagnosis : diagnosis.condition}
+                                {diagnosis.probability && ` (${diagnosis.probability})`}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {result.differentialDiagnosis.toRuleOut && result.differentialDiagnosis.toRuleOut.length > 0 && (
+                        <div>
+                          <h4 className="font-medium mb-2">Conditions to Rule Out</h4>
+                          <ul className="list-disc pl-4">
+                            {result.differentialDiagnosis.toRuleOut.map((condition: any, index: number) => (
+                              <li key={index}>
+                                {typeof condition === 'string' ? condition : condition.condition}
+                                {condition.rationale && ` - ${condition.rationale}`}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Treatment Plan Suggestions */}
@@ -887,7 +914,7 @@ export default function AnalyzePage() {
                                             <div>
                                               <span className="font-medium">Parameters:</span>
                                               <ul className="list-disc pl-4">
-                                                {action.suggestedMonitoring.parameters.map((param: string, i: number) => (
+                                                {(action.suggestedMonitoring.parameters || []).map((param: string, i: number) => (
                                                   <li key={i}>{param}</li>
                                                 ))}
                                               </ul>
@@ -1037,13 +1064,223 @@ export default function AnalyzePage() {
                 {/* Monitoring Parameters */}
                 <div className="space-y-4">
                   <h3 className="font-semibold">Monitoring Parameters</h3>
-                  {renderSectionContent(result.monitoringParameters, 'No monitoring parameters available')}
+                  {result.monitoringParameters && result.monitoringParameters.length > 0 ? (
+                    <div className="space-y-4">
+                      {result.monitoringParameters.map((param: any, index: number) => (
+                        <Card key={index} className="bg-muted/50">
+                          <CardContent className="pt-6">
+                            <div className="space-y-4">
+                              <div>
+                                <h5 className="font-medium">{param.parameter}</h5>
+                                <div className="grid grid-cols-2 gap-4 mt-2">
+                                  <div>
+                                    <p className="text-sm"><span className="font-medium">Frequency:</span> {param.frequency}</p>
+                                    <p className="text-sm"><span className="font-medium">Normal Range:</span> {param.normalRange}</p>
+                                    <p className="text-sm"><span className="font-medium">Action Threshold:</span> {param.actionThreshold}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm"><span className="font-medium">Method:</span> {param.method}</p>
+                                    <p className="text-sm"><span className="font-medium">Rationale:</span> {param.rationale}</p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {param.actions && (
+                                <div>
+                                  <h6 className="text-sm font-medium mb-2">Action Thresholds</h6>
+                                  <div className="grid grid-cols-3 gap-4">
+                                    {param.actions.mild && (
+                                      <div className="bg-background p-3 rounded-lg">
+                                        <h6 className="text-sm font-medium">Mild</h6>
+                                        <p className="text-sm"><span className="font-medium">Threshold:</span> {param.actions.mild.threshold}</p>
+                                        <p className="text-sm"><span className="font-medium">Action:</span> {param.actions.mild.action}</p>
+                                        <p className="text-sm"><span className="font-medium">Rationale:</span> {param.actions.mild.rationale}</p>
+                                      </div>
+                                    )}
+                                    {param.actions.moderate && (
+                                      <div className="bg-background p-3 rounded-lg">
+                                        <h6 className="text-sm font-medium">Moderate</h6>
+                                        <p className="text-sm"><span className="font-medium">Threshold:</span> {param.actions.moderate.threshold}</p>
+                                        <p className="text-sm"><span className="font-medium">Action:</span> {param.actions.moderate.action}</p>
+                                        <p className="text-sm"><span className="font-medium">Rationale:</span> {param.actions.moderate.rationale}</p>
+                                      </div>
+                                    )}
+                                    {param.actions.severe && (
+                                      <div className="bg-background p-3 rounded-lg">
+                                        <h6 className="text-sm font-medium">Severe</h6>
+                                        <p className="text-sm"><span className="font-medium">Threshold:</span> {param.actions.severe.threshold}</p>
+                                        <p className="text-sm"><span className="font-medium">Action:</span> {param.actions.severe.action}</p>
+                                        <p className="text-sm"><span className="font-medium">Rationale:</span> {param.actions.severe.rationale}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {param.documentation && (
+                                <div>
+                                  <h6 className="text-sm font-medium mb-2">Documentation</h6>
+                                  <div className="bg-background p-3 rounded-lg">
+                                    <p className="text-sm"><span className="font-medium">Format:</span> {param.documentation.format}</p>
+                                    <p className="text-sm"><span className="font-medium">Frequency:</span> {param.documentation.frequency}</p>
+                                    <p className="text-sm"><span className="font-medium">Review:</span> {param.documentation.review}</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">No monitoring parameters available</p>
+                  )}
                 </div>
 
                 {/* Patient Education */}
                 <div className="space-y-4">
                   <h3 className="font-semibold">Patient Education</h3>
-                  {renderSectionContent(result.patientEducation, 'No patient education materials available')}
+                  {result.patientEducation && result.patientEducation.length > 0 ? (
+                    <div className="space-y-4">
+                      {result.patientEducation.map((education: any, index: number) => (
+                        <Card key={index} className="bg-muted/50">
+                          <CardContent className="pt-6">
+                            <div className="space-y-4">
+                              <div>
+                                <h5 className="font-medium">{education.topic}</h5>
+                                {education.keyPoints && education.keyPoints.length > 0 && (
+                                  <div className="mt-2">
+                                    <h6 className="text-sm font-medium mb-2">Key Points</h6>
+                                    <ul className="list-disc pl-4">
+                                      {education.keyPoints.map((point: string, i: number) => (
+                                        <li key={i} className="text-sm">{point}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+
+                              {education.warningSigns && education.warningSigns.length > 0 && (
+                                <div>
+                                  <h6 className="text-sm font-medium mb-2">Warning Signs</h6>
+                                  <div className="space-y-2">
+                                    {education.warningSigns.map((warning: any, i: number) => (
+                                      <Alert key={i} variant="destructive">
+                                        <AlertTitle>{warning.description}</AlertTitle>
+                                        <AlertDescription>
+                                          <div className="space-y-1">
+                                            <p><strong>Threshold:</strong> {warning.threshold}</p>
+                                            <p><strong>Action:</strong> {warning.action}</p>
+                                            <p><strong>Rationale:</strong> {warning.rationale}</p>
+                                            <p><strong>Urgency:</strong> {warning.urgency}</p>
+                                          </div>
+                                        </AlertDescription>
+                                      </Alert>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {education.selfCare && education.selfCare.length > 0 && (
+                                <div>
+                                  <h6 className="text-sm font-medium mb-2">Self Care Instructions</h6>
+                                  <div className="space-y-2">
+                                    {education.selfCare.map((care: any, i: number) => (
+                                      <div key={i} className="bg-background p-3 rounded-lg">
+                                        <p className="font-medium">{care.instruction}</p>
+                                        <div className="mt-2 space-y-1 text-sm">
+                                          <p><span className="font-medium">Frequency:</span> {care.frequency}</p>
+                                          <p><span className="font-medium">Rationale:</span> {care.rationale}</p>
+                                          <p><span className="font-medium">Technique:</span> {care.technique}</p>
+                                          {care.precautions && care.precautions.length > 0 && (
+                                            <div>
+                                              <p className="font-medium">Precautions:</p>
+                                              <ul className="list-disc pl-4">
+                                                {care.precautions.map((precaution: string, j: number) => (
+                                                  <li key={j}>{precaution}</li>
+                                                ))}
+                                              </ul>
+                                            </div>
+                                          )}
+                                          <p><span className="font-medium">Expected Outcome:</span> {care.expectedOutcome}</p>
+                                          <p><span className="font-medium">When to Stop:</span> {care.whenToStop}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {education.lifestyleModifications && education.lifestyleModifications.length > 0 && (
+                                <div>
+                                  <h6 className="text-sm font-medium mb-2">Lifestyle Modifications</h6>
+                                  <div className="space-y-2">
+                                    {education.lifestyleModifications.map((mod: any, i: number) => (
+                                      <div key={i} className="bg-background p-3 rounded-lg">
+                                        <p className="font-medium">{mod.modification}</p>
+                                        <div className="mt-2 space-y-1 text-sm">
+                                          <p><span className="font-medium">Target:</span> {mod.target}</p>
+                                          <p><span className="font-medium">Rationale:</span> {mod.rationale}</p>
+                                          {mod.resources && mod.resources.length > 0 && (
+                                            <div>
+                                              <p className="font-medium">Resources:</p>
+                                              <ul className="list-disc pl-4">
+                                                {mod.resources.map((resource: string, j: number) => (
+                                                  <li key={j}>{resource}</li>
+                                                ))}
+                                              </ul>
+                                            </div>
+                                          )}
+                                          <p><span className="font-medium">Timeline:</span> {mod.timeline}</p>
+                                          <p><span className="font-medium">Success Criteria:</span> {mod.successCriteria}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {education.followUp && (
+                                <div>
+                                  <h6 className="text-sm font-medium mb-2">Follow-up Plan</h6>
+                                  <div className="bg-background p-3 rounded-lg">
+                                    <div className="space-y-1 text-sm">
+                                      <p><span className="font-medium">Timing:</span> {education.followUp.timing}</p>
+                                      <p><span className="font-medium">Purpose:</span> {education.followUp.purpose}</p>
+                                      {education.followUp.requiredTests && education.followUp.requiredTests.length > 0 && (
+                                        <div>
+                                          <p className="font-medium">Required Tests:</p>
+                                          <ul className="list-disc pl-4">
+                                            {education.followUp.requiredTests.map((test: string, i: number) => (
+                                              <li key={i}>{test}</li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+                                      {education.followUp.warningSigns && education.followUp.warningSigns.length > 0 && (
+                                        <div>
+                                          <p className="font-medium">Warning Signs:</p>
+                                          <ul className="list-disc pl-4">
+                                            {education.followUp.warningSigns.map((sign: string, i: number) => (
+                                              <li key={i}>{sign}</li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+                                      <p><span className="font-medium">Success Criteria:</span> {education.followUp.successCriteria}</p>
+                                      <p><span className="font-medium">Adjustment Criteria:</span> {education.followUp.adjustmentCriteria}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">No patient education materials available</p>
+                  )}
                 </div>
 
                 {/* Impact Assessment */}
