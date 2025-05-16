@@ -12,6 +12,8 @@ import {
   Stethoscope,
   Menu,
   X,
+  Icon,
+  User,
   Brain,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -20,11 +22,11 @@ import { UserNav } from '../../components/layout/user-nav';
 
 const navItems = [
   { href: '/doctor-dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/doctor-dashboard/profile', label: 'Profile', icon: User },
   { href: '/doctor-dashboard/patients', label: 'Patients', icon: Users },
   { href: '/doctor-dashboard/appointments', label: 'Appointments', icon: Calendar },
   { href: '/doctor-dashboard/medical-records', label: 'Medical Records', icon: FileText },
   { href: '/doctor-dashboard/prescriptions', label: 'Prescriptions', icon: Pill },
-  { href: '/doctor-dashboard/consultations', label: 'Consultations', icon: Stethoscope },
   { href: '/doctor-dashboard/analyze', label: 'Analyze with AI', icon: Brain },
 ];
 
