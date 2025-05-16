@@ -30,9 +30,24 @@ interface MedicalRecord {
   created_at: string;
   patients: {
     id: string;
-    users: { name: string }[];
+    users: {
+      name: string;
+    };
   };
 }
+
+type MedicalRecordWithRelations = {
+  id: string;
+  description: string;
+  notes: string;
+  created_at: string;
+  patients: {
+    id: string;
+    users: {
+      name: string;
+    };
+  };
+};
 
 interface MedicalReport {
   id: string;
@@ -456,26 +471,18 @@ export async function POST(request: Request) {
     const currentSymptoms = formData.get('currentSymptoms') as string;
     const doctorId = formData.get('doctorId') as string;
 
-    if (!currentSymptoms) {
+    if (!currentSymptoms || !doctorId) {
       return NextResponse.json(
-        { error: 'Current symptoms are required' },
+        { error: 'Symptoms and doctor ID are required' },
         { status: 400 }
       );
     }
 
-    if (!doctorId) {
-      return NextResponse.json(
-        { error: 'Doctor ID is required' },
-        { status: 400 }
-      );
-    }
-
-    // Fetch historical medical records for the doctor's patients
-    const { data: medicalRecords, error: recordsError } = await supabase
+    // Get past medical records from the database
+    const { data: pastRecords, error: recordsError } = await supabase
       .from('medical_records')
       .select(`
         id,
-        patient_id,
         description,
         notes,
         created_at,
@@ -487,133 +494,126 @@ export async function POST(request: Request) {
         )
       `)
       .eq('doctor_id', doctorId)
-      .order('created_at', { ascending: false });
+      .eq('record_type', 'symptom_analysis')
+      .order('created_at', { ascending: false })
+      .limit(10) as { data: MedicalRecordWithRelations[] | null, error: any };
 
     if (recordsError) {
-      console.error('Error fetching medical records:', recordsError);
-      // Return fallback response instead of error
-      return NextResponse.json({
-        similarCases: [],
-        _fallback: true,
-        _message: 'Unable to fetch medical records. Please try again later.'
-      });
+      console.error('Error fetching past records:', recordsError);
+      return NextResponse.json(
+        { error: 'Failed to fetch past records' },
+        { status: 500 }
+      );
     }
 
-    // Fetch medical reports separately
-    const { data: medicalReports, error: reportsError } = await supabase
-      .from('medical_reports')
-      .select('*')
-      .eq('doctor_id', doctorId)
-      .order('created_at', { ascending: false });
-
-    if (reportsError) {
-      console.error('Error fetching medical reports:', reportsError);
-      // Return fallback response instead of error
-      return NextResponse.json({
-        similarCases: [],
-        _fallback: true,
-        _message: 'Unable to fetch medical reports. Please try again later.'
-      });
+    if (!pastRecords || pastRecords.length === 0) {
+      return NextResponse.json([]);
     }
 
-    // Create a map of patient_id to their latest medical report
-    const patientReports = new Map(
-      medicalReports?.map(report => [report.patient_id, report]) || []
-    );
+    // Prepare the prompt for similarity analysis
+    const prompt = `As a medical expert, analyze the similarity between the current symptoms and past cases. For each past case, provide:
+1. Similarity score (0-1)
+2. Key differences
+3. Clinical insights
+4. Treatment recommendations based on past outcomes
 
-    // Prepare historical cases for analysis
-    const historicalCases: HistoricalCase[] = (medicalRecords as unknown as MedicalRecord[]).map(record => {
-      const report = patientReports.get(record.patient_id);
-      return {
-        patientName: record.patients?.users[0]?.name || 'Unknown Patient',
-        symptoms: record.description || '',
-        diagnosis: report?.diagnosis || 'No diagnosis recorded',
-        visitDate: record.created_at,
-        treatmentOutcome: report?.notes || 'No outcome recorded'
-      };
-    });
+Current symptoms: ${currentSymptoms}
 
-    if (historicalCases.length === 0) {
-      return NextResponse.json({
-        similarCases: [],
-        _fallback: true,
-        _message: 'No historical cases found for comparison.'
-      });
-    }
+Past cases:
+${pastRecords.map((record, index) => `
+Case ${index + 1}:
+Symptoms: ${record.description}
+Analysis: ${record.notes}
+`).join('\n')}
 
-    // Prepare messages for OpenAI
-    const messages: ChatCompletionMessageParam[] = [
-      {
-        role: 'system',
-        content: `You are a medical AI assistant helping to find similar cases from a doctor's patient history.
-        Analyze the current symptoms against historical cases and return a JSON response with the following structure:
+Provide the analysis in this JSON format:
+{
+  "similarCases": [
+    {
+      "id": "record_id",
+      "similarityScore": 0.85,
+      "keyDifferences": [
         {
-          "similarCases": [
-            {
-              "patientName": "Name of the patient",
-              "similarityScore": "Number between 0-1",
-              "keyDifferences": ["List of key differences"],
-              "relevantInsights": ["List of relevant insights"],
-              "diagnosis": "Original diagnosis",
-              "treatmentOutcome": "Treatment outcome",
-              "visitDate": "Date of visit"
-            }
-          ]
+          "type": "current|historical",
+          "description": "Difference description",
+          "clinicalImpact": {
+            "severity": "high|medium|low",
+            "urgency": "immediate|urgent|routine",
+            "monitoring": ["parameter1", "parameter2"]
+          }
         }
-        
-        Consider the following when analyzing:
-        1. Symptom similarity and patterns
-        2. Severity and progression
-        3. Treatment outcomes
-        4. Time-based patterns
-        5. Risk factors
-        6. Demographic similarities
-        
-        Return only the top 5 most similar cases.`
+      ],
+      "insights": [
+        {
+          "type": "insight_type",
+          "content": "Insight description",
+          "clinicalContext": "Clinical context",
+          "color": "color_for_ui",
+          "icon": "icon_name"
+        }
+      ],
+      "treatmentRecommendations": {
+        "immediate": [
+          {
+            "action": "Recommended action",
+            "priority": "high|medium|low",
+            "color": "color_for_ui",
+            "icon": "icon_name",
+            "clinicalRationale": "Rationale",
+            "parameters": ["param1", "param2"]
+          }
+        ],
+        "shortTerm": [...],
+        "longTerm": [...]
       },
-      {
-        role: 'user',
-        content: `Current symptoms: ${currentSymptoms}\n\nHistorical cases:\n${JSON.stringify(historicalCases, null, 2)}`
+      "visualElements": {
+        "severity": "default|secondary|destructive|outline",
+        "confidence": "default|secondary|destructive|outline",
+        "relevance": "default|secondary|destructive|outline"
       }
-    ];
-
-    // Try API call with automatic fallback
-    const analysis = await safeApiCall(messages);
-    
-    if (analysis) {
-      // Validate and ensure all required fields are present
-      const validatedAnalysis = {
-        similarCases: (analysis.similarCases || []).map((case_: any) => ({
-          patientName: case_.patientName || 'Unknown Patient',
-          similarityScore: case_.similarityScore || 0,
-          keyDifferences: case_.keyDifferences || ['No differences analyzed'],
-          relevantInsights: case_.insights || ['No insights available'],
-          diagnosis: case_.diagnosis || 'No diagnosis recorded',
-          treatmentOutcome: case_.treatmentOutcome || 'No outcome recorded',
-          visitDate: case_.visitDate || 'Date not available'
-        }))
-      };
-
-      return NextResponse.json(validatedAnalysis.similarCases);
     }
+  ]
+}`;
 
-    // If API call fails, use fallback analysis
-    console.log('Using enhanced medical analysis');
-    const fallbackResponse = getFallbackResponse(currentSymptoms, historicalCases);
-    return NextResponse.json({
-      similarCases: fallbackResponse,
-      _fallback: true,
-      _message: 'Using advanced medical analysis for similar cases.'
+    // Get similarity analysis from OpenAI
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: "You are a medical expert analyzing similarity between current and past cases. Focus on clinically relevant similarities and differences."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.2,
+      max_tokens: 2000,
     });
 
+    const analysis = JSON.parse(completion.choices[0].message.content || '{}');
+
+    // Combine the analysis with patient information
+    const similarCases = analysis.similarCases.map((caseAnalysis: any) => {
+      const record = pastRecords?.find(r => r.id === caseAnalysis.id);
+      return {
+        ...caseAnalysis,
+        patientName: record?.patients?.users?.name || 'Unknown Patient',
+        visitDate: record?.created_at,
+        symptoms: record?.description,
+        diagnosis: JSON.parse(record?.notes || '{}').differentialDiagnosis?.mostLikely?.[0]?.condition || 'Not specified',
+        treatmentOutcome: 'Treatment outcome will be determined after follow-up'
+      };
+    });
+
+    return NextResponse.json(similarCases);
   } catch (error: any) {
-    console.error('Analysis error:', error);
-    
-    // Always return a valid response, never an error
-    return NextResponse.json({
-      similarCases: [],
-      _fallback: true,
-      _message: 'Unable to perform analysis at this time. Please try again later.'
-    });
+    console.error('Similarity analysis error:', error);
+    return NextResponse.json(
+      { error: 'Failed to analyze similar cases' },
+      { status: 500 }
+    );
   }
 } 

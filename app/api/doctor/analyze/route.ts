@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { supabase } from '@/lib/supabase';
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -167,6 +168,7 @@ export async function POST(request: Request) {
     const symptoms = formData.get('symptoms') as string;
     const image = formData.get('image') as File | null;
     const doctorId = formData.get('doctorId') as string;
+    const patientId = formData.get('patientId') as string;
 
     if (!symptoms) {
       return NextResponse.json(
@@ -422,7 +424,7 @@ Respond in this exact JSON format:
         const base64Image = Buffer.from(imageBuffer).toString('base64');
 
         const imageResponse = await openai.chat.completions.create({
-          model: "gpt-4-vision-preview",
+          model: "gpt-3.5-turbo",
           messages: [
             {
               role: "user",

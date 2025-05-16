@@ -330,21 +330,60 @@ interface TreatmentRecommendation {
   parameters: string[];
 }
 
-interface SimilarPatient {
+interface SimilarCase {
   id: string;
-  name: string;
+  patientName: string;
   visitDate: string;
   symptoms: string;
   diagnosis: string;
   treatmentOutcome: string;
   similarityScore: number;
-  visualElements: VisualElements;
-  keyDifferences: KeyDifference[];
-  insights: Insight[];
+  keyDifferences: Array<{
+    type: 'current' | 'historical';
+    description: string;
+    clinicalImpact?: {
+      severity: 'high' | 'medium' | 'low';
+      urgency: 'immediate' | 'urgent' | 'routine';
+      monitoring: string[];
+    };
+  }>;
+  insights: Array<{
+    type: string;
+    content: string;
+    clinicalContext: string;
+    color: string;
+    icon: string;
+  }>;
   treatmentRecommendations: {
-    immediate: TreatmentRecommendation[];
-    shortTerm: TreatmentRecommendation[];
-    longTerm: TreatmentRecommendation[];
+    immediate: Array<{
+      action: string;
+      priority: 'high' | 'medium' | 'low';
+      color: string;
+      icon: string;
+      clinicalRationale: string;
+      parameters: string[];
+    }>;
+    shortTerm: Array<{
+      action: string;
+      priority: 'high' | 'medium' | 'low';
+      color: string;
+      icon: string;
+      clinicalRationale: string;
+      parameters: string[];
+    }>;
+    longTerm: Array<{
+      action: string;
+      priority: 'high' | 'medium' | 'low';
+      color: string;
+      icon: string;
+      clinicalRationale: string;
+      parameters: string[];
+    }>;
+  };
+  visualElements: {
+    severity: 'default' | 'secondary' | 'destructive' | 'outline';
+    confidence: 'default' | 'secondary' | 'destructive' | 'outline';
+    relevance: 'default' | 'secondary' | 'destructive' | 'outline';
   };
 }
 
@@ -354,12 +393,40 @@ export default function AnalyzePage() {
   const [image, setImage] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [similarPatients, setSimilarPatients] = useState<SimilarPatient[]>([]);
+  const [similarCases, setSimilarCases] = useState<SimilarCase[]>([]);
   const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setImage(e.target.files[0]);
+    }
+  };
+
+  const findSimilarCases = async (symptoms: string) => {
+    if (!symptoms.trim() || !session?.user?.id) return;
+
+    setIsLoadingSimilar(true);
+    try {
+      const formData = new FormData();
+      formData.append('currentSymptoms', symptoms);
+      formData.append('doctorId', session.user.id);
+
+      const response = await fetch('/api/doctor/analyze/similarity', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to find similar cases');
+      }
+
+      const data = await response.json();
+      setSimilarCases(data);
+    } catch (error) {
+      console.error('Error finding similar cases:', error);
+      toast.error('Failed to find similar cases');
+    } finally {
+      setIsLoadingSimilar(false);
     }
   };
 
@@ -376,16 +443,14 @@ export default function AnalyzePage() {
 
     setIsAnalyzing(true);
     try {
-      // Prepare the data for analysis
       const formData = new FormData();
       formData.append('symptoms', symptoms);
       if (image) {
         formData.append('image', image);
       }
-      formData.append('specialties', JSON.stringify(['General Medicine']));
       formData.append('doctorId', session.user.id);
+      formData.append('patientId', session.user.id); // For now, using doctor's ID as patient ID
 
-      // Send to our API endpoint
       const response = await fetch('/api/doctor/analyze', {
         method: 'POST',
         body: formData,
@@ -397,68 +462,16 @@ export default function AnalyzePage() {
       }
 
       const analysisResult = await response.json();
-      
-      // Validate the response structure
-      if (!analysisResult || typeof analysisResult !== 'object') {
-        throw new Error('Invalid analysis response');
-      }
+      setResult(analysisResult);
 
-      // Ensure all required sections are present with default values if missing
-      const validatedResult = {
-        ...analysisResult,
-        impactAssessment: analysisResult.impactAssessment || {
-          activitiesOfDailyLiving: {
-            functionalImpact: ['Requires clinical assessment'],
-            assistanceRequired: ['Requires clinical assessment'],
-            duration: 'Requires assessment'
-          },
-          qualityOfLife: {
-            physicalImpact: ['Requires clinical assessment'],
-            emotionalImpact: ['Requires clinical assessment'],
-            socialImpact: ['Requires clinical assessment']
-          },
-          workSchoolImpact: {
-            functionalLimitations: ['Requires clinical assessment'],
-            requiredAccommodations: ['Requires clinical assessment'],
-            expectedDuration: 'Requires assessment'
-          },
-          psychologicalImpact: {
-            emotionalEffects: ['Requires clinical assessment'],
-            copingMechanisms: ['Requires clinical assessment'],
-            supportNeeds: ['Requires clinical assessment']
-          }
-        },
-        emergencyProtocol: analysisResult.emergencyProtocol || {
-          whenToSeekHelp: ['Severe pain or discomfort', 'Difficulty breathing', 'Sudden changes in symptoms'],
-          emergencyContacts: ['Emergency Services: 911', 'Local Emergency Room', 'Primary Care Provider'],
-          firstAidSteps: ['Stay calm and assess the situation', 'Call emergency services if needed', 'Follow basic first aid guidelines']
-        },
-        followUpPlan: analysisResult.followUpPlan || {
-          timeline: 'Schedule follow-up within 1 week',
-          duration: 'Requires assessment',
-          frequency: 'As recommended by healthcare provider',
-          milestones: ['Initial medical evaluation', 'Diagnostic test completion', 'Treatment plan implementation'],
-          warningSigns: ['Worsening of symptoms', 'New symptoms development', 'Severe pain or discomfort'],
-          lifestyleModifications: ['Maintain regular sleep schedule', 'Stay hydrated', 'Follow prescribed treatment plan']
-        }
-      };
-
-      setResult(validatedResult);
-
-      // After getting analysis, find similar patients
-      try {
-        await findSimilarPatients(symptoms);
-      } catch (similarError) {
-        console.error('Similar patients error:', similarError);
-        // Don't throw here, as the main analysis was successful
-        toast.warning('Could not find similar cases');
-      }
+      // After successful analysis, find similar cases
+      await findSimilarCases(symptoms);
 
       toast.success('Analysis completed successfully');
     } catch (error: any) {
       console.error('Analysis error:', error);
       toast.error(error.message || 'Failed to analyze symptoms');
-      setResult(null); // Clear any partial results
+      setResult(null);
     } finally {
       setIsAnalyzing(false);
     }
@@ -556,34 +569,6 @@ export default function AnalyzePage() {
 
     // Handle strings
     return <p>{content}</p>;
-  };
-
-  const findSimilarPatients = async (currentSymptoms: string) => {
-    setIsLoadingSimilar(true);
-    try {
-      // Prepare data for similarity analysis
-      const formData = new FormData();
-      formData.append('currentSymptoms', currentSymptoms);
-      formData.append('doctorId', session?.user?.id || '');
-
-      // Send to API for similarity analysis
-      const response = await fetch('/api/doctor/analyze/similarity', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Similarity analysis failed');
-      }
-
-      const similarPatientsData = await response.json();
-      setSimilarPatients(similarPatientsData);
-    } catch (error) {
-      console.error('Similar patients error:', error);
-      toast.error('Failed to find similar patients');
-    } finally {
-      setIsLoadingSimilar(false);
-    }
   };
 
   return (
@@ -1375,26 +1360,26 @@ export default function AnalyzePage() {
                 <div className="flex items-center justify-center py-4">
                   <Loader2 className="h-6 w-6 animate-spin" />
                 </div>
-              ) : similarPatients.length > 0 ? (
+              ) : similarCases.length > 0 ? (
                 <div className="space-y-4">
-                  {similarPatients.map((patient) => (
-                    <Card key={patient.id} className="overflow-hidden">
+                  {similarCases.map((case_) => (
+                    <Card key={case_.id} className="overflow-hidden">
                       <CardContent className="p-6">
                         <div className="flex items-center justify-between mb-4">
                           <div>
-                            <h3 className="font-semibold text-lg">{patient.name}</h3>
+                            <h3 className="font-semibold text-lg">{case_.patientName}</h3>
                             <p className="text-sm text-muted-foreground">
-                              Visit Date: {new Date(patient.visitDate).toLocaleDateString()}
+                              Visit Date: {new Date(case_.visitDate).toLocaleDateString()}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Badge variant={patient.visualElements?.severity}>
-                              {patient.visualElements?.severity} Severity
+                            <Badge variant={case_.visualElements.severity}>
+                              {case_.visualElements.severity} Severity
                             </Badge>
                             <div className="flex items-center gap-1">
                               <span className="text-sm font-medium">Similarity:</span>
-                              <Progress value={patient.similarityScore * 100} className="w-24" />
-                              <span className="text-sm">{Math.round(patient.similarityScore * 100)}%</span>
+                              <Progress value={case_.similarityScore * 100} className="w-24" />
+                              <span className="text-sm">{Math.round(case_.similarityScore * 100)}%</span>
                             </div>
                           </div>
                         </div>
@@ -1405,13 +1390,13 @@ export default function AnalyzePage() {
                               <h4 className="font-medium mb-2">Clinical Presentation</h4>
                               <div className="space-y-2">
                                 <p className="text-sm">
-                                  <span className="font-medium">Symptoms:</span> {patient.symptoms}
+                                  <span className="font-medium">Symptoms:</span> {case_.symptoms}
                                 </p>
                                 <p className="text-sm">
-                                  <span className="font-medium">Diagnosis:</span> {patient.diagnosis}
+                                  <span className="font-medium">Diagnosis:</span> {case_.diagnosis}
                                 </p>
                                 <p className="text-sm">
-                                  <span className="font-medium">Treatment Outcome:</span> {patient.treatmentOutcome}
+                                  <span className="font-medium">Treatment Outcome:</span> {case_.treatmentOutcome}
                                 </p>
                               </div>
                             </div>
@@ -1420,10 +1405,10 @@ export default function AnalyzePage() {
                               <h4 className="font-medium mb-2">Key Differences</h4>
                               <ScrollArea className="h-32">
                                 <div className="space-y-2">
-                                  {patient.keyDifferences.map((diff, index) => (
-                                    <Alert key={index} className={`border-${diff.color} bg-${diff.color}/10`}>
+                                  {case_.keyDifferences.map((diff, index) => (
+                                    <Alert key={index} className={`border-${diff.clinicalImpact?.severity} bg-${diff.clinicalImpact?.severity}/10`}>
                                       <div className="flex items-center gap-2">
-                                        <span>{diff.icon}</span>
+                                        <span>{diff.type === 'current' ? '🔄' : '📅'}</span>
                                         <AlertTitle className="text-sm font-medium">
                                           {diff.type === 'current' ? 'Current Case' : 'Historical Case'}
                                         </AlertTitle>
@@ -1433,7 +1418,7 @@ export default function AnalyzePage() {
                                       </AlertDescription>
                                       {diff.clinicalImpact && (
                                         <div className="mt-2 text-xs">
-                                          <Badge variant={diff.clinicalImpact.severity === 'destructive' ? 'destructive' : 'default'}>
+                                          <Badge variant={diff.clinicalImpact.severity === 'high' ? 'destructive' : 'default'}>
                                             {diff.clinicalImpact.urgency} Priority
                                           </Badge>
                                           <div className="mt-1">
@@ -1453,7 +1438,7 @@ export default function AnalyzePage() {
                               <h4 className="font-medium mb-2">Clinical Insights</h4>
                               <ScrollArea className="h-32">
                                 <div className="space-y-2">
-                                  {patient.insights.map((insight, index) => (
+                                  {case_.insights.map((insight: { type: string; content: string; clinicalContext: string; color: string; icon: string }, index: number) => (
                                     <Alert key={index} className={`border-${insight.color} bg-${insight.color}/10`}>
                                       <div className="flex items-center gap-2">
                                         <span>{insight.icon}</span>
@@ -1474,11 +1459,18 @@ export default function AnalyzePage() {
                             <div>
                               <h4 className="font-medium mb-2">Treatment Recommendations</h4>
                               <div className="space-y-4">
-                                {Object.entries(patient.treatmentRecommendations).map(([timeline, recommendations]) => (
+                                {Object.entries(case_.treatmentRecommendations).map(([timeline, recommendations]) => (
                                   <div key={timeline}>
                                     <h5 className="text-sm font-medium mb-2 capitalize">{timeline} Actions</h5>
                                     <div className="space-y-2">
-                                      {recommendations.map((rec: TreatmentRecommendation, index) => (
+                                      {(recommendations as Array<{
+                                        action: string;
+                                        priority: 'high' | 'medium' | 'low';
+                                        color: string;
+                                        icon: string;
+                                        clinicalRationale: string;
+                                        parameters: string[];
+                                      }>).map((rec, index: number) => (
                                         <Alert key={index} className={`border-${rec.color} bg-${rec.color}/10`}>
                                           <div className="flex items-center gap-2">
                                             <span>{rec.icon}</span>
@@ -1513,19 +1505,19 @@ export default function AnalyzePage() {
                           <div className="flex items-center gap-4">
                             <div>
                               <span className="font-medium">Confidence:</span>
-                              <Badge variant={patient.visualElements?.confidence}>
-                                {patient.visualElements?.confidence}
+                              <Badge variant={case_.visualElements.confidence}>
+                                {case_.visualElements.confidence}
                               </Badge>
                             </div>
                             <div>
                               <span className="font-medium">Relevance:</span>
-                              <Badge variant={patient.visualElements?.relevance}>
-                                {patient.visualElements?.relevance}
+                              <Badge variant={case_.visualElements.relevance}>
+                                {case_.visualElements.relevance}
                               </Badge>
                             </div>
                           </div>
                           <div className="text-muted-foreground">
-                            Last updated: {new Date(patient.visitDate).toLocaleDateString()}
+                            Last updated: {new Date(case_.visitDate).toLocaleDateString()}
                           </div>
                         </div>
                       </CardContent>
