@@ -1,18 +1,10 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { createClient } from '@supabase/supabase-js';
-import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 // Fallback response for when API is unavailable
 const getFallbackResponse = (symptoms: string, specialty: string) => {
@@ -187,21 +179,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: 'Doctor ID is required' },
         { status: 400 }
-      );
-    }
-
-    // Get doctor's specialty from the database
-    const { data: doctorData, error: doctorError } = await supabase
-      .from('doctors')
-      .select('specialty')
-      .eq('id', doctorId)
-      .single();
-
-    if (doctorError) {
-      console.error('Error fetching doctor data:', doctorError);
-      return NextResponse.json(
-        { error: 'Failed to fetch doctor data' },
-        { status: 500 }
       );
     }
 
@@ -521,30 +498,6 @@ Respond in this exact JSON format:
         patientEducation: analysis.patientEducation || []
       };
 
-      // Save to medical records
-      try {
-        const { error: recordError } = await supabase
-          .from('medical_records')
-          .insert({
-            patient_id: null, // Will be updated when patient is selected
-            doctor_id: doctorId,
-            record_type: 'symptom_analysis',
-            description: symptoms,
-            notes: JSON.stringify(validatedAnalysis),
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            is_active: true
-          });
-
-        if (recordError) {
-          console.error('Error saving to medical records:', recordError);
-          // Don't throw here, as the analysis was successful
-        }
-      } catch (dbError) {
-        console.error('Database error:', dbError);
-        // Don't throw here, as the analysis was successful
-      }
-
       return NextResponse.json(validatedAnalysis);
     } catch (apiError: any) {
       console.error('OpenAI API error:', apiError);
@@ -557,26 +510,8 @@ Respond in this exact JSON format:
           apiError.message?.includes('quota')) {
         
         console.log('Using fallback analysis due to API limitations');
-        const fallbackResponse = getFallbackResponse(symptoms, doctorData?.specialty || 'General Medicine');
+        const fallbackResponse = getFallbackResponse(symptoms, 'General Medicine');
         
-        // Save fallback analysis to medical records
-        try {
-          await supabase
-            .from('medical_records')
-            .insert({
-              patient_id: null,
-              doctor_id: doctorId,
-              record_type: 'symptom_analysis_fallback',
-              description: symptoms,
-              notes: JSON.stringify(fallbackResponse),
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              is_active: true
-            });
-        } catch (dbError) {
-          console.error('Error saving fallback analysis:', dbError);
-        }
-
         return NextResponse.json({
           ...fallbackResponse,
           _fallback: true,
