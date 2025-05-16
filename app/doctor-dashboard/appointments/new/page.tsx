@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, Clock, ArrowLeft } from 'lucide-react';
@@ -34,6 +34,9 @@ import Link from 'next/link';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
+import { useSession } from 'next-auth/react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { Database } from '@/types/supabase';
 
 const appointmentFormSchema = z.object({
   patientName: z.string({
@@ -55,12 +58,33 @@ const appointmentFormSchema = z.object({
 });
 
 const timeSlots = [
-  '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-  '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
-  '15:00', '15:30', '16:00', '16:30', '17:00'
+  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
+  '11:00', '12:30', '13:00', '13:30', '14:00', '14:30', 
+  '15:00', '15:30', '16:00', '16:30', '17:00', '17:30'
 ];
 
-const durations = ['15', '30', '45', '60'];
+const durations = {
+  'Check-up': [
+    { value: '30', label: '30 minutes' },
+    { value: '45', label: '45 minutes' }
+  ],
+  'Follow-up': [
+    { value: '15', label: '15 minutes' },
+    { value: '30', label: '30 minutes' }
+  ],
+  'Consultation': [
+    { value: '45', label: '45 minutes' },
+    { value: '60', label: '1 hour' }
+  ],
+  'Test/Screening': [
+    { value: '30', label: '30 minutes' },
+    { value: '45', label: '45 minutes' }
+  ],
+  'Vaccination': [
+    { value: '15', label: '15 minutes' },
+    { value: '30', label: '30 minutes' }
+  ]
+};
 
 const appointmentTypes = [
   'Check-up',
@@ -70,35 +94,178 @@ const appointmentTypes = [
   'Emergency'
 ];
 
-// Mock patient data for testing
-const mockPatients = [
-  { id: '1', name: 'John Doe' },
-  { id: '2', name: 'Jane Smith' },
-  { id: '3', name: 'Alice Johnson' },
-  { id: '4', name: 'Bob Wilson' },
-];
+interface Patient {
+  id: string;
+  name: string;
+}
+
+interface DoctorAppointment {
+  appointment_date: string;
+  duration: number;
+}
+
+interface Appointment {
+  appointment_date: string;
+  duration: number;
+}
 
 export default function NewAppointmentPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [isLoading, setIsLoading] = useState(false);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [doctorAppointments, setDoctorAppointments] = useState<Appointment[]>([]);
+  const [patientAppointments, setPatientAppointments] = useState<Appointment[]>([]);
+  const supabase = createClientComponentClient<Database>();
 
   const form = useForm<z.infer<typeof appointmentFormSchema>>({
     resolver: zodResolver(appointmentFormSchema),
   });
 
+  // Add useEffect to fetch patients
+  useEffect(() => {
+    const fetchPatients = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('id, name')
+          .eq('is_doctor', false);
+
+        if (error) {
+          console.error('Error fetching patients:', error);
+          return;
+        }
+
+        setPatients(data || []);
+      } catch (error) {
+        console.error('Error fetching patients:', error);
+      }
+    };
+
+    fetchPatients();
+  }, [supabase]);
+
+  // Add function to check time slot availability
+  const isTimeSlotAvailable = (time: string) => {
+    if (!form.getValues('date') || !form.getValues('patientName')) return true;
+
+    const selectedDate = new Date(form.getValues('date'));
+    const [hours, minutes] = time.split(':');
+    selectedDate.setHours(parseInt(hours), parseInt(minutes));
+
+    // Check doctor's schedule
+    const isDoctorAvailable = !doctorAppointments.some(appointment => {
+      const appointmentDate = new Date(appointment.appointment_date);
+      const appointmentEnd = new Date(appointmentDate.getTime() + appointment.duration * 60000);
+      return selectedDate >= appointmentDate && selectedDate < appointmentEnd;
+    });
+
+    // Check patient's schedule
+    const isPatientAvailable = !patientAppointments.some(appointment => {
+      const appointmentDate = new Date(appointment.appointment_date);
+      const appointmentEnd = new Date(appointmentDate.getTime() + appointment.duration * 60000);
+      return selectedDate >= appointmentDate && selectedDate < appointmentEnd;
+    });
+
+    return isDoctorAvailable && isPatientAvailable;
+  };
+
+  // Add effect to fetch both doctor's and patient's appointments when date or patient changes
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      const selectedDate = form.getValues('date');
+      const selectedPatient = patients.find(p => p.name === form.getValues('patientName'));
+
+      if (!session?.user?.id || !selectedDate) {
+        setDoctorAppointments([]);
+        setPatientAppointments([]);
+        return;
+      }
+
+      try {
+        const startOfDay = new Date(selectedDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        
+        const endOfDay = new Date(selectedDate);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        // Fetch doctor's appointments
+        const { data: doctorData, error: doctorError } = await supabase
+          .from('appointments')
+          .select('appointment_date, duration')
+          .eq('doctor_id', session.user.id)
+          .gte('appointment_date', startOfDay.toISOString())
+          .lte('appointment_date', endOfDay.toISOString())
+          .eq('is_active', true);
+
+        if (doctorError) throw doctorError;
+        setDoctorAppointments(doctorData || []);
+
+        // Fetch patient's appointments if a patient is selected
+        if (selectedPatient) {
+          const { data: patientData, error: patientError } = await supabase
+            .from('appointments')
+            .select('appointment_date, duration')
+            .eq('patient_id', selectedPatient.id)
+            .gte('appointment_date', startOfDay.toISOString())
+            .lte('appointment_date', endOfDay.toISOString())
+            .eq('is_active', true);
+
+          if (patientError) throw patientError;
+          setPatientAppointments(patientData || []);
+        } else {
+          setPatientAppointments([]);
+        }
+      } catch (error) {
+        console.error('Error fetching appointments:', error);
+      }
+    };
+
+    fetchAppointments();
+  }, [form.watch('date'), form.watch('patientName'), session?.user?.id, supabase, patients]);
+
   async function onSubmit(values: z.infer<typeof appointmentFormSchema>) {
+    if (!session?.user?.id) {
+      console.error('No user session found');
+      return;
+    }
+
     try {
       setIsLoading(true);
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Log the form values
-      console.log('Appointment created:', values);
-      
+
+      // Find patient ID from the selected patient
+      const selectedPatient = patients.find(p => p.name === values.patientName);
+      if (!selectedPatient) {
+        throw new Error('Selected patient not found');
+      }
+
+      // Combine date and time
+      const appointmentDate = new Date(values.date);
+      const [hours, minutes] = values.time.split(':');
+      appointmentDate.setHours(parseInt(hours), parseInt(minutes));
+
+      // Create the appointment
+      const { error: appointmentError } = await supabase
+        .from('appointments')
+        .insert({
+          patient_id: selectedPatient.id,
+          doctor_id: session.user.id,
+          appointment_date: appointmentDate.toISOString(),
+          duration: parseInt(values.duration),
+          type: values.type,
+          notes: values.notes || null,
+          is_active: true
+        });
+
+      if (appointmentError) {
+        throw new Error(`Failed to create appointment: ${appointmentError.message}`);
+      }
+
       // Navigate back to appointments page
       router.push('/doctor-dashboard/appointments');
     } catch (error) {
       console.error('Error creating appointment:', error);
+      // You might want to add toast notification here
     } finally {
       setIsLoading(false);
     }
@@ -148,7 +315,7 @@ export default function NewAppointmentPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {mockPatients.map((patient) => (
+                            {patients.map((patient) => (
                               <SelectItem key={patient.id} value={patient.name}>
                                 {patient.name}
                               </SelectItem>
@@ -204,9 +371,9 @@ export default function NewAppointmentPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {durations.map((duration) => (
-                              <SelectItem key={duration} value={duration}>
-                                {duration} minutes
+                            {form.watch('type') && durations[form.watch('type') as keyof typeof durations]?.map((duration) => (
+                              <SelectItem key={duration.value} value={duration.value}>
+                                {duration.label}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -256,11 +423,18 @@ export default function NewAppointmentPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {timeSlots.map((time) => (
-                              <SelectItem key={time} value={time}>
-                                {time}
-                              </SelectItem>
-                            ))}
+                            {timeSlots.map((time) => {
+                              const isAvailable = isTimeSlotAvailable(time);
+                              return (
+                                <SelectItem 
+                                  key={time} 
+                                  value={time}
+                                  disabled={!isAvailable}
+                                >
+                                  {time} {!isAvailable && '(Booked)'}
+                                </SelectItem>
+                              );
+                            })}
                           </SelectContent>
                         </Select>
                         <FormMessage />
