@@ -15,6 +15,7 @@ import {
   Menu,
   X,
   Brain,
+  User,
 } from 'lucide-react';
 import { UserNav } from './user-nav';
 import { cn } from '../../lib/utils';
@@ -22,14 +23,16 @@ import { cn } from '../../lib/utils';
 
 const doctorNavItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/dashboard/patients', label: 'Patients', icon: Users },
-  { href: '/dashboard/appointments', label: 'Appointments', icon: Calendar },
-  { href: '/dashboard/medical-records', label: 'Medical Records', icon: FileText },
-  { href: '/dashboard/prescriptions', label: 'Prescriptions', icon: Pill },
+  { href: '/doctor-dashboard/profile', label: 'Profile', icon: User },
+  { href: '/doctor-dashboard/patients', label: 'Patients', icon: Users },
+  { href: '/doctor-dashboard/appointments', label: 'Appointments', icon: Calendar },
+  { href: '/doctor-dashboard/medical-records', label: 'Medical Records', icon: FileText },
+  { href: '/doctor-dashboard/prescriptions', label: 'Prescriptions', icon: Pill },
 ];
 
 const patientNavItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard/profile', label: 'Profile', icon: User },
   { href: '/dashboard/appointments', label: 'Appointments', icon: Calendar },
   { href: '/dashboard/medical-history', label: 'Medical History', icon: FileText },
   { href: '/dashboard/medications', label: 'Medications', icon: Pill },
