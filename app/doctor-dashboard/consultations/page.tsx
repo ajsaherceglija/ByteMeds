@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { Stethoscope, Search, User, Plus, Clock } from 'lucide-react';
+import { Stethoscope, Search, User, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -20,68 +20,47 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import Link from 'next/link';
-
-// Mock data - replace with actual API calls
-const mockConsultations = [
-  {
-    id: 1,
-    patientName: 'John Doe',
-    type: 'Initial Consultation',
-    date: '2024-03-20T10:00:00Z',
-    duration: 30,
-    symptoms: 'Fever, headache',
-    status: 'scheduled',
-  },
-  {
-    id: 2,
-    patientName: 'Jane Smith',
-    type: 'Follow-up',
-    date: '2024-03-20T14:30:00Z',
-    duration: 15,
-    symptoms: 'Blood pressure check',
-    status: 'scheduled',
-  },
-  {
-    id: 3,
-    patientName: 'Alice Brown',
-    type: 'Emergency',
-    date: '2024-03-19T09:00:00Z',
-    duration: 45,
-    symptoms: 'Severe abdominal pain',
-    status: 'completed',
-  },
-];
+import { getConsultations, Consultation } from './actions';
 
 export default function ConsultationsPage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [consultations, setConsultations] = useState<Consultation[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filteredConsultations = mockConsultations.filter(consultation =>
+  useEffect(() => {
+    async function loadConsultations() {
+      try {
+        const data = await getConsultations();
+        setConsultations(data);
+      } catch (error) {
+        console.error('Failed to load consultations:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadConsultations();
+  }, []);
+
+  const filteredConsultations = consultations.filter(consultation =>
     consultation.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     consultation.type.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Consultations</h1>
-          <p className="text-muted-foreground">
-            Manage and schedule patient consultations
-          </p>
-        </div>
-        <Button asChild>
-          <Link href="/doctor-dashboard/consultations/new">
-            <Plus className="mr-2 h-4 w-4" />
-            New Consultation
-          </Link>
-        </Button>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Consultations</h1>
+        <p className="text-muted-foreground">
+          View your upcoming and past consultations
+        </p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>All Consultations</CardTitle>
           <CardDescription>
-            {filteredConsultations.length} consultations found
+            {isLoading ? 'Loading...' : `${filteredConsultations.length} consultations found`}
           </CardDescription>
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
@@ -149,6 +128,13 @@ export default function ConsultationsPage() {
                   </TableCell>
                 </TableRow>
               ))}
+              {!isLoading && filteredConsultations.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                    No consultations found
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>
