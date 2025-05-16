@@ -15,6 +15,7 @@ import {
   Icon,
   User,
   Brain,
+  FileSearch,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,7 @@ const navItems = [
   { href: '/doctor-dashboard/medical-records', label: 'Medical Records', icon: FileText },
   { href: '/doctor-dashboard/prescriptions', label: 'Prescriptions', icon: Pill },
   { href: '/doctor-dashboard/analyze', label: 'Analyze with AI', icon: Brain },
+  { href: '/doctor-dashboard/summarize', label: 'Summarize', icon: FileSearch },
 ];
 
 export default function DoctorDashboardLayout({

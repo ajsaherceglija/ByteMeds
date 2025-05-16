@@ -16,18 +16,20 @@ import {
   X,
   Brain,
   User,
+  FileSearch,
 } from 'lucide-react';
 import { UserNav } from './user-nav';
 import { cn } from '../../lib/utils';
 
 
 const doctorNavItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/doctor-dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/doctor-dashboard/profile', label: 'Profile', icon: User },
   { href: '/doctor-dashboard/patients', label: 'Patients', icon: Users },
   { href: '/doctor-dashboard/appointments', label: 'Appointments', icon: Calendar },
   { href: '/doctor-dashboard/medical-records', label: 'Medical Records', icon: FileText },
   { href: '/doctor-dashboard/prescriptions', label: 'Prescriptions', icon: Pill },
+  { href: '/doctor-dashboard/summarize', label: 'Summarize', icon: FileSearch },
 ];
 
 const patientNavItems = [
