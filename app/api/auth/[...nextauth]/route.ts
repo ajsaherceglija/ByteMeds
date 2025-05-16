@@ -55,6 +55,7 @@ export const authOptions: NextAuthOptions = {
             email: userData.email,
             name: userData.name,
             is_doctor: userData.is_doctor,
+            is_admin: userData.is_admin || false,
           };
         } catch (error) {
           console.error('Auth error:', error);
@@ -70,6 +71,7 @@ export const authOptions: NextAuthOptions = {
         token.email = user.email;
         token.name = user.name;
         token.is_doctor = user.is_doctor;
+        token.is_admin = user.is_admin;
       }
       return token;
     },
@@ -79,6 +81,7 @@ export const authOptions: NextAuthOptions = {
         session.user.email = token.email as string;
         session.user.name = token.name as string;
         session.user.is_doctor = token.is_doctor as boolean;
+        session.user.is_admin = token.is_admin as boolean;
       }
       return session;
     },
