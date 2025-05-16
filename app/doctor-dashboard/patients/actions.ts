@@ -36,6 +36,26 @@ type PatientRelationship = {
   };
 };
 
+type SharedPatient = {
+  patient_id: string;
+  relationship_type: string;
+  started_at: string | null;
+  notes: string | null;
+  patients: {
+    id: string;
+    status: string | null;
+    users: {
+      id: string;
+      name: string;
+      DOB: string | null;
+    };
+  };
+};
+
+type PatientWithSharingDoctor = SharedPatient & {
+  sharingDoctor: string;
+};
+
 export async function getMyPatients(): Promise<PatientWithDetails[]> {
   const cookieStore = cookies();
   const supabase = createServerComponentClient<Database>({ cookies: () => cookieStore });
@@ -86,7 +106,8 @@ export async function getSharedPatients(): Promise<PatientWithDetails[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
-  const { data: patients, error } = await supabase
+  // First get all shared patients
+  const { data: sharedPatients, error: sharedError } = await supabase
     .from('doctor_patient_relationships')
     .select(`
       patient_id,
@@ -101,28 +122,48 @@ export async function getSharedPatients(): Promise<PatientWithDetails[]> {
           name,
           DOB
         )
-      ),
-      doctors:doctor_id (
-        users (
-          name
-        )
       )
     `)
     .eq('doctor_id', user.id)
     .eq('relationship_type', 'shared');
 
-  if (error) throw error;
-  if (!patients) return [];
+  if (sharedError) throw sharedError;
+  if (!sharedPatients) return [];
+
+  // For each shared patient, get the assigned doctor
+  const patientsWithSharingDoctor = await Promise.all(
+    (sharedPatients as unknown as SharedPatient[]).map(async (patient) => {
+      const { data: assignedDoctor } = await supabase
+        .from('doctor_patient_relationships')
+        .select(`
+          doctors (
+            users (
+              name
+            )
+          )
+        `)
+        .eq('patient_id', patient.patient_id)
+        .eq('relationship_type', 'assigned')
+        .single();
+
+      const sharingDoctor = (assignedDoctor as any)?.doctors?.users?.name || 'Unknown';
+
+      return {
+        ...patient,
+        sharingDoctor
+      } as PatientWithSharingDoctor;
+    })
+  );
 
   // Transform the data to match our frontend interface
-  return (patients as unknown as PatientRelationship[]).map(rel => ({
+  return patientsWithSharingDoctor.map(rel => ({
     id: rel.patients.id,
     name: rel.patients.users.name,
     age: calculateAge(rel.patients.users.DOB),
     lastVisit: rel.started_at || new Date().toISOString(),
     condition: 'Active',
     status: rel.patients.status || 'Active',
-    sharedBy: rel.doctors?.users.name,
+    sharedBy: rel.sharingDoctor
   }));
 }
 
