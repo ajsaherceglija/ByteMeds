@@ -80,6 +80,8 @@ type BookAppointmentModalProps = {
 interface Doctor {
   id: string;
   name: string;
+  specialty: string | null;
+  available: boolean;
 }
 
 type DbUser = Database['public']['Tables']['users']['Row'];
@@ -88,7 +90,7 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
   const { data: session, status } = useSession();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingDoctors, setIsLoadingDoctors] = useState(true);
+  const [isLoadingDoctors, setIsLoadingDoctors] = useState(false);
   const supabase = createClientComponentClient<Database>();
   const { toast } = useToast();
 
@@ -103,70 +105,89 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
     },
   });
 
+  // Watch for date and time changes to fetch available doctors
+  const selectedDate = form.watch('date');
+  const selectedTime = form.watch('time');
+  const selectedDuration = form.watch('duration');
+
+  // Fetch available doctors when date or time changes
   useEffect(() => {
-    console.log('Modal open state:', open);
-    console.log('Session status:', status);
-    
-    if (!open) {
+    if (!open || !selectedDate || !selectedTime || !selectedDuration) {
       return;
     }
 
-    const fetchDoctors = async () => {
-      console.log('Starting to fetch doctors...');
+    const fetchAvailableDoctors = async () => {
       setIsLoadingDoctors(true);
       try {
-        // First get users who are doctors
+        // Calculate appointment start and end times
+        const appointmentDate = new Date(selectedDate);
+        const [hours, minutes] = selectedTime.split(':');
+        appointmentDate.setHours(parseInt(hours), parseInt(minutes));
+        
+        const endDate = new Date(appointmentDate);
+        endDate.setMinutes(endDate.getMinutes() + parseInt(selectedDuration));
+
+        // First get all doctors
         const { data: doctorUsers, error: userError } = await supabase
           .from('users')
-          .select('id, name, is_doctor')
+          .select(`
+            id,
+            name,
+            doctors (
+              specialty
+            )
+          `)
           .eq('is_doctor', true);
-
-        console.log('Doctor users response:', { doctorUsers, userError });
 
         if (userError) throw userError;
 
         if (!doctorUsers?.length) {
-          console.log('No doctors found');
           setDoctors([]);
           return;
         }
 
-        // Get additional doctor details
-        const doctorIds = doctorUsers.map(user => user.id);
-        const { data: doctorDetails, error: detailsError } = await supabase
-          .from('doctors')
-          .select('id, specialty, available_for_appointments')
-          .in('id', doctorIds)
-          .eq('available_for_appointments', true);
+        // Then check their appointments for conflicts
+        const { data: existingAppointments, error: appointmentsError } = await supabase
+          .from('appointments')
+          .select('doctor_id, appointment_date, duration')
+          .eq('is_active', true)
+          .gte('appointment_date', appointmentDate.toISOString())
+          .lte('appointment_date', endDate.toISOString());
 
-        console.log('Doctor details response:', { doctorDetails, detailsError });
+        if (appointmentsError) throw appointmentsError;
 
-        if (detailsError) throw detailsError;
+        // Filter out doctors with conflicting appointments
+        const availableDoctors = doctorUsers.map(doctor => {
+          const doctorAppointments = existingAppointments?.filter(
+            apt => apt.doctor_id === doctor.id
+          ) || [];
 
-        // Combine the data
-        const availableDoctors = doctorUsers
-          .filter(user => doctorDetails?.some(detail => detail.id === user.id))
-          .map(user => {
-            const details = doctorDetails?.find(detail => detail.id === user.id);
-            return {
-              id: user.id,
-              name: user.name,
-              specialty: details?.specialty || null
-            };
+          const hasConflict = doctorAppointments.some(apt => {
+            const aptStart = new Date(apt.appointment_date);
+            const aptEnd = new Date(aptStart);
+            aptEnd.setMinutes(aptEnd.getMinutes() + apt.duration);
+
+            return (
+              (appointmentDate >= aptStart && appointmentDate < aptEnd) ||
+              (endDate > aptStart && endDate <= aptEnd)
+            );
           });
 
-        console.log('Available doctors:', availableDoctors);
-        setDoctors(availableDoctors);
-      } catch (error: any) {
-        console.error('Error fetching doctors:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
+          return {
+            id: doctor.id,
+            name: doctor.name,
+            specialty: doctor.doctors?.[0]?.specialty || null,
+            available: !hasConflict
+          };
         });
+
+        console.log('Available doctors:', availableDoctors);
+        setDoctors(availableDoctors.filter(d => d.available));
+      } catch (error: any) {
+        console.error('Error fetching doctors:', error);
         toast({
           title: 'Error',
-          description: 'Failed to load doctors. Please try again.',
+          description: 'Failed to load available doctors. Please try again.',
           variant: 'destructive',
         });
       } finally {
@@ -174,84 +195,91 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
       }
     };
 
-    fetchDoctors();
-  }, [open, status, supabase, toast]);
-
-  // Add effect to monitor doctors state
-  useEffect(() => {
-    console.log('Current doctors state:', doctors);
-    console.log('Current loading state:', isLoadingDoctors);
-  }, [doctors, isLoadingDoctors]);
+    fetchAvailableDoctors();
+  }, [open, selectedDate, selectedTime, selectedDuration, supabase, toast]);
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
-    console.log('Submitting appointment data:', data);
-    
-    if (status !== 'authenticated' || !session?.user?.id) {
-      toast({
-        title: 'Error',
-        description: 'You must be logged in to book an appointment.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
     setIsLoading(true);
     try {
-      // Combine date and time
+      console.log('Form data received:', data);
+
+      // Basic validation
+      if (!data.doctorId || !data.date || !data.time || !data.type || !data.duration) {
+        throw new Error('Please fill in all required fields');
+      }
+
+      // Format the date
       const appointmentDate = new Date(data.date);
       const [hours, minutes] = data.time.split(':');
-      appointmentDate.setHours(parseInt(hours), parseInt(minutes));
+      appointmentDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
 
+      // Log the formatted date
+      console.log('Formatted appointment date:', appointmentDate.toISOString());
+
+      // Create appointment data
       const appointmentData = {
-        patient_id: session.user.id,
+        patient_id: session?.user?.id,
         doctor_id: data.doctorId,
         appointment_date: appointmentDate.toISOString(),
         duration: parseInt(data.duration),
         type: data.type,
         notes: data.notes || null,
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        is_active: true
       };
 
-      console.log('Creating appointment with:', appointmentData);
+      console.log('Attempting to insert appointment with data:', appointmentData);
 
-      const { data: newAppointment, error } = await supabase
+      // First check if there's a conflicting appointment
+      const { data: existingAppointments, error: checkError } = await supabase
         .from('appointments')
-        .insert(appointmentData)
-        .select()
-        .single();
+        .select('id')
+        .eq('doctor_id', data.doctorId)
+        .eq('appointment_date', appointmentDate.toISOString())
+        .eq('is_active', true);
 
-      if (error) {
-        console.error('Supabase error:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
-        throw error;
+      if (checkError) {
+        console.error('Error checking existing appointments:', checkError);
+        throw new Error('Failed to check appointment availability');
       }
 
-      console.log('Appointment created:', newAppointment);
+      if (existingAppointments && existingAppointments.length > 0) {
+        throw new Error('This time slot is already booked');
+      }
+
+      // Insert the appointment
+      const { data: result, error: insertError } = await supabase
+        .from('appointments')
+        .insert([appointmentData])
+        .select('*')
+        .single();
+
+      if (insertError) {
+        console.error('Insert error:', insertError);
+        throw new Error(insertError.message);
+      }
+
+      if (!result) {
+        throw new Error('Failed to create appointment - no data returned');
+      }
+
+      console.log('Successfully created appointment:', result);
 
       toast({
         title: 'Success',
-        description: 'Appointment booked successfully!',
+        description: 'Your appointment has been booked successfully!',
       });
       
       onClose();
       form.reset();
     } catch (error: any) {
-      console.error('Error booking appointment:', {
+      console.error('Full error details:', {
         message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code
+        error: error
       });
-      
+
       toast({
         title: 'Error',
-        description: error.message || 'Failed to book appointment. Please try again.',
+        description: error.message || 'Failed to create appointment. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -265,51 +293,12 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
         <DialogHeader>
           <DialogTitle>Book Appointment</DialogTitle>
           <DialogDescription>
-            Fill in the details below to book your appointment.
+            Select your preferred date and time to see available doctors.
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="doctorId"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Select Doctor</FormLabel>
-                  <FormControl>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      value={field.value}
-                      disabled={isLoadingDoctors}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={isLoadingDoctors ? "Loading doctors..." : "Select a doctor"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {isLoadingDoctors ? (
-                          <SelectItem value="loading" disabled>
-                            <span className="text-muted-foreground">Loading doctors...</span>
-                          </SelectItem>
-                        ) : doctors.length === 0 ? (
-                          <SelectItem value="no-doctors" disabled>
-                            <span className="text-muted-foreground">No doctors available</span>
-                          </SelectItem>
-                        ) : (
-                          doctors.map((doctor) => (
-                            <SelectItem key={doctor.id} value={doctor.id}>
-                              Dr. {doctor.name}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
             <FormField
               control={form.control}
               name="date"
@@ -352,30 +341,57 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="time"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Select Time</FormLabel>
-                  <FormControl>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select time slot" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {timeSlots.map((time) => (
-                          <SelectItem key={time} value={time}>
-                            {time}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="time"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Time</FormLabel>
+                    <FormControl>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select time" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {timeSlots.map((time) => (
+                            <SelectItem key={time} value={time}>
+                              {time}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="duration"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Duration</FormLabel>
+                    <FormControl>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select duration" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {durations.map((duration) => (
+                            <SelectItem key={duration.value} value={duration.value}>
+                              {duration.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}
@@ -404,21 +420,44 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
 
             <FormField
               control={form.control}
-              name="duration"
+              name="doctorId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Duration</FormLabel>
+                  <FormLabel>Select Doctor</FormLabel>
                   <FormControl>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      value={field.value}
+                      disabled={isLoadingDoctors || !selectedDate || !selectedTime}
+                    >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select duration" />
+                        <SelectValue 
+                          placeholder={
+                            !selectedDate || !selectedTime 
+                              ? "First select date and time" 
+                              : isLoadingDoctors 
+                                ? "Loading available doctors..." 
+                                : "Select a doctor"
+                          } 
+                        />
                       </SelectTrigger>
                       <SelectContent>
-                        {durations.map((duration) => (
-                          <SelectItem key={duration.value} value={duration.value}>
-                            {duration.label}
+                        {isLoadingDoctors ? (
+                          <SelectItem value="loading" disabled>
+                            Loading available doctors...
                           </SelectItem>
-                        ))}
+                        ) : doctors.length === 0 ? (
+                          <SelectItem value="no-doctors" disabled>
+                            No doctors available at this time
+                          </SelectItem>
+                        ) : (
+                          doctors.map((doctor) => (
+                            <SelectItem key={doctor.id} value={doctor.id}>
+                              Dr. {doctor.name}
+                              {doctor.specialty && ` - ${doctor.specialty}`}
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                   </FormControl>
@@ -448,8 +487,11 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? 'Booking...' : 'Book Appointment'}
+              <Button 
+                type="submit" 
+                disabled={isLoading || isLoadingDoctors || doctors.length === 0}
+              >
+                {isLoading ? 'Booking...' : 'Request Appointment'}
               </Button>
             </DialogFooter>
           </form>
