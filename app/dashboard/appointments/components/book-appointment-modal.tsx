@@ -52,18 +52,40 @@ const appointmentTypes = [
 ];
 
 const timeSlots = [
-  '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-  '14:00', '14:30', '15:00', '15:30', '16:00', '16:30',
+  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
+  '11:00', '12:30', '13:00', '13:30', '14:00', '14:30', 
+  '15:00', '15:30', '16:00', '16:30', '17:00', '17:30'
 ];
 
-const durations = [
-  { value: '15', label: '15 minutes' },
-  { value: '30', label: '30 minutes' },
-  { value: '45', label: '45 minutes' },
-  { value: '60', label: '1 hour' },
-];
+const durations = {
+  'Check-up': [
+    { value: '30', label: '30 minutes' },
+    { value: '45', label: '45 minutes' }
+  ],
+  'Follow-up': [
+    { value: '15', label: '15 minutes' },
+    { value: '30', label: '30 minutes' }
+  ],
+  'Consultation': [
+    { value: '45', label: '45 minutes' },
+    { value: '60', label: '1 hour' }
+  ],
+  'Test/Screening': [
+    { value: '30', label: '30 minutes' },
+    { value: '45', label: '45 minutes' }
+  ],
+  'Vaccination': [
+    { value: '15', label: '15 minutes' },
+    { value: '30', label: '30 minutes' }
+  ]
+};
+
+interface DoctorWithSpecialty extends Doctor {
+  specialty: string | null;
+}
 
 const formSchema = z.object({
+  specialty: z.string({ required_error: 'Please select a specialty' }),
   doctorId: z.string({ required_error: 'Please select a doctor' }),
   date: z.date({ required_error: 'Please select a date' }),
   time: z.string({ required_error: 'Please select a time' }),
@@ -84,17 +106,26 @@ interface Doctor {
 
 type DbUser = Database['public']['Tables']['users']['Row'];
 
+interface DoctorAppointment {
+  appointment_date: string;
+  duration: number;
+}
+
 export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProps) {
   const { data: session, status } = useSession();
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [doctors, setDoctors] = useState<DoctorWithSpecialty[]>([]);
+  const [specialties, setSpecialties] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(true);
+  const [doctorAppointments, setDoctorAppointments] = useState<DoctorAppointment[]>([]);
+  const [patientAppointments, setPatientAppointments] = useState<DoctorAppointment[]>([]);
   const supabase = createClientComponentClient<Database>();
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      specialty: '',
       doctorId: '',
       time: '',
       type: '',
@@ -111,9 +142,44 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
       return;
     }
 
+    const fetchSpecialties = async () => {
+      if (!open) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('doctors')
+          .select('specialty')
+          .not('specialty', 'is', null);
+
+        if (error) throw error;
+
+        // Get unique specialties
+        const uniqueSpecialties = Array.from(new Set(data.map(d => d.specialty).filter(Boolean)));
+        setSpecialties(uniqueSpecialties as string[]);
+      } catch (error) {
+        console.error('Error fetching specialties:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load specialties.',
+          variant: 'destructive',
+        });
+      }
+    };
+
+    fetchSpecialties();
+  }, [open, supabase, toast]);
+
+  useEffect(() => {
     const fetchDoctors = async () => {
-      console.log('Starting to fetch doctors...');
+      const selectedSpecialty = form.getValues('specialty');
+      if (!open || !selectedSpecialty) {
+        setDoctors([]);
+        return;
+      }
+
+      console.log('Fetching doctors for specialty:', selectedSpecialty);
       setIsLoadingDoctors(true);
+      
       try {
         // First get users who are doctors
         const { data: doctorUsers, error: userError } = await supabase
@@ -121,25 +187,21 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
           .select('id, name, is_doctor')
           .eq('is_doctor', true);
 
-        console.log('Doctor users response:', { doctorUsers, userError });
-
         if (userError) throw userError;
 
         if (!doctorUsers?.length) {
-          console.log('No doctors found');
           setDoctors([]);
           return;
         }
 
-        // Get additional doctor details
+        // Get additional doctor details with specialty filter
         const doctorIds = doctorUsers.map(user => user.id);
         const { data: doctorDetails, error: detailsError } = await supabase
           .from('doctors')
           .select('id, specialty, available_for_appointments')
           .in('id', doctorIds)
+          .eq('specialty', selectedSpecialty)
           .eq('available_for_appointments', true);
-
-        console.log('Doctor details response:', { doctorDetails, detailsError });
 
         if (detailsError) throw detailsError;
 
@@ -155,18 +217,12 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
             };
           });
 
-        console.log('Available doctors:', availableDoctors);
         setDoctors(availableDoctors);
       } catch (error: any) {
-        console.error('Error fetching doctors:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
+        console.error('Error fetching doctors:', error);
         toast({
           title: 'Error',
-          description: 'Failed to load doctors. Please try again.',
+          description: 'Failed to load doctors.',
           variant: 'destructive',
         });
       } finally {
@@ -175,13 +231,97 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
     };
 
     fetchDoctors();
-  }, [open, status, supabase, toast]);
+  }, [open, form.watch('specialty'), supabase, toast]);
 
-  // Add effect to monitor doctors state
   useEffect(() => {
-    console.log('Current doctors state:', doctors);
-    console.log('Current loading state:', isLoadingDoctors);
-  }, [doctors, isLoadingDoctors]);
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'specialty') {
+        form.setValue('doctorId', '');
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
+  // Update the time slot availability check
+  const isTimeSlotAvailable = (time: string) => {
+    if (!form.getValues('date') || !form.getValues('doctorId')) return true;
+
+    const selectedDate = new Date(form.getValues('date'));
+    const [hours, minutes] = time.split(':');
+    selectedDate.setHours(parseInt(hours), parseInt(minutes));
+
+    // Check doctor's schedule
+    const isDoctorAvailable = !doctorAppointments.some(appointment => {
+      const appointmentDate = new Date(appointment.appointment_date);
+      const appointmentEnd = new Date(appointmentDate.getTime() + appointment.duration * 60000);
+      return selectedDate >= appointmentDate && selectedDate < appointmentEnd;
+    });
+
+    // Check patient's schedule
+    const isPatientAvailable = !patientAppointments.some(appointment => {
+      const appointmentDate = new Date(appointment.appointment_date);
+      const appointmentEnd = new Date(appointmentDate.getTime() + appointment.duration * 60000);
+      return selectedDate >= appointmentDate && selectedDate < appointmentEnd;
+    });
+
+    return isDoctorAvailable && isPatientAvailable;
+  };
+
+  // Update the effect to fetch both doctor's and patient's appointments
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      const selectedDoctor = form.getValues('doctorId');
+      const selectedDate = form.getValues('date');
+
+      if (!selectedDoctor || !selectedDate || !session?.user?.id) {
+        setDoctorAppointments([]);
+        setPatientAppointments([]);
+        return;
+      }
+
+      try {
+        const startOfDay = new Date(selectedDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        
+        const endOfDay = new Date(selectedDate);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        // Fetch doctor's appointments
+        const { data: doctorData, error: doctorError } = await supabase
+          .from('appointments')
+          .select('appointment_date, duration')
+          .eq('doctor_id', selectedDoctor)
+          .gte('appointment_date', startOfDay.toISOString())
+          .lte('appointment_date', endOfDay.toISOString())
+          .eq('is_active', true);
+
+        if (doctorError) throw doctorError;
+        setDoctorAppointments(doctorData || []);
+
+        // Fetch patient's appointments
+        const { data: patientData, error: patientError } = await supabase
+          .from('appointments')
+          .select('appointment_date, duration')
+          .eq('patient_id', session.user.id)
+          .gte('appointment_date', startOfDay.toISOString())
+          .lte('appointment_date', endOfDay.toISOString())
+          .eq('is_active', true);
+
+        if (patientError) throw patientError;
+        setPatientAppointments(patientData || []);
+
+      } catch (error) {
+        console.error('Error fetching appointments:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to check availability.',
+          variant: 'destructive',
+        });
+      }
+    };
+
+    fetchAppointments();
+  }, [form.watch('doctorId'), form.watch('date'), session?.user?.id, supabase, toast]);
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     console.log('Submitting appointment data:', data);
@@ -273,6 +413,34 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
+              name="specialty"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel>Select Specialty</FormLabel>
+                  <FormControl>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      value={field.value}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a specialty" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {specialties.map((specialty) => (
+                          <SelectItem key={specialty} value={specialty}>
+                            {specialty}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
               name="doctorId"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
@@ -281,19 +449,25 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
                     <Select 
                       onValueChange={field.onChange} 
                       value={field.value}
-                      disabled={isLoadingDoctors}
+                      disabled={isLoadingDoctors || !form.getValues('specialty')}
                     >
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder={isLoadingDoctors ? "Loading doctors..." : "Select a doctor"} />
+                        <SelectValue placeholder={
+                          !form.getValues('specialty') 
+                            ? "First select a specialty" 
+                            : isLoadingDoctors 
+                              ? "Loading doctors..." 
+                              : "Select a doctor"
+                        } />
                       </SelectTrigger>
                       <SelectContent>
                         {isLoadingDoctors ? (
                           <SelectItem value="loading" disabled>
-                            <span className="text-muted-foreground">Loading doctors...</span>
+                            Loading doctors...
                           </SelectItem>
                         ) : doctors.length === 0 ? (
                           <SelectItem value="no-doctors" disabled>
-                            <span className="text-muted-foreground">No doctors available</span>
+                            No doctors available for this specialty
                           </SelectItem>
                         ) : (
                           doctors.map((doctor) => (
@@ -340,7 +514,10 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
                           selected={field.value}
                           onSelect={field.onChange}
                           disabled={(date) =>
-                            date < new Date() || date < new Date('1900-01-01')
+                            date < new Date() || 
+                            date < new Date('1900-01-01') ||
+                            date.getDay() === 0 || // Sunday
+                            date.getDay() === 6    // Saturday
                           }
                           initialFocus
                         />
@@ -364,11 +541,18 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
                         <SelectValue placeholder="Select time slot" />
                       </SelectTrigger>
                       <SelectContent>
-                        {timeSlots.map((time) => (
-                          <SelectItem key={time} value={time}>
-                            {time}
-                          </SelectItem>
-                        ))}
+                        {timeSlots.map((time) => {
+                          const isAvailable = isTimeSlotAvailable(time);
+                          return (
+                            <SelectItem 
+                              key={time} 
+                              value={time}
+                              disabled={!isAvailable}
+                            >
+                              {time} {!isAvailable && '(Booked)'}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </FormControl>
@@ -414,7 +598,7 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
                         <SelectValue placeholder="Select duration" />
                       </SelectTrigger>
                       <SelectContent>
-                        {durations.map((duration) => (
+                        {form.watch('type') && durations[form.watch('type') as keyof typeof durations]?.map((duration) => (
                           <SelectItem key={duration.value} value={duration.value}>
                             {duration.label}
                           </SelectItem>
