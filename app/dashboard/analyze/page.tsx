@@ -14,9 +14,45 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Upload } from 'lucide-react';
+import { Loader2, Upload, Mic, MicOff } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
+
+// Add TypeScript declarations for the Web Speech API
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
+  error: any;
+}
+
+interface SpeechRecognitionError extends Event {
+  error: string;
+  message: string;
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onstart: (event: Event) => void;
+  onresult: (event: SpeechRecognitionEvent) => void;
+  onerror: (event: SpeechRecognitionError) => void;
+  onend: (event: Event) => void;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+}
+
+interface SpeechRecognitionConstructor {
+  new (): SpeechRecognition;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  }
+}
 
 interface AnalysisResult {
   priority: 'Low' | 'Medium' | 'High';
@@ -91,11 +127,101 @@ interface AnalysisResult {
   }>;
 }
 
+// Add VoiceInput component
+const VoiceInput = ({ onTranscript, isRecording, setIsRecording }: { 
+  onTranscript: (text: string) => void;
+  isRecording: boolean;
+  setIsRecording: (recording: boolean) => void;
+}) => {
+  const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
+
+  const startRecording = () => {
+    try {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        toast.error('Speech recognition is not supported in your browser');
+        return;
+      }
+
+      const newRecognition = new SpeechRecognition();
+      newRecognition.continuous = true;
+      newRecognition.interimResults = true;
+      newRecognition.lang = 'en-US';
+
+      newRecognition.onstart = () => {
+        setIsRecording(true);
+        toast.success('Listening...');
+      };
+
+      newRecognition.onresult = (event) => {
+        const transcript = Array.from(event.results)
+          .map(result => result[0].transcript)
+          .join(' ');
+        onTranscript(transcript);
+      };
+
+      newRecognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        toast.error('Error recording: ' + event.error);
+        setIsRecording(false);
+      };
+
+      newRecognition.onend = () => {
+        setIsRecording(false);
+      };
+
+      setRecognition(newRecognition);
+      newRecognition.start();
+    } catch (error) {
+      console.error('Error initializing speech recognition:', error);
+      toast.error('Failed to start voice recording');
+      setIsRecording(false);
+    }
+  };
+
+  const stopRecording = () => {
+    if (recognition) {
+      recognition.stop();
+      setIsRecording(false);
+      toast.success('Recording stopped');
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      className={`relative ${isRecording ? 'bg-red-100 hover:bg-red-200 dark:bg-red-900/50 dark:hover:bg-red-800/50' : ''}`}
+      onClick={toggleRecording}
+      title={isRecording ? 'Stop recording' : 'Start voice input'}
+    >
+      {isRecording ? (
+        <>
+          <MicOff className="h-4 w-4" />
+          <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+        </>
+      ) : (
+        <Mic className="h-4 w-4" />
+      )}
+    </Button>
+  );
+};
+
 export default function AnalyzePage() {
   const { data: session, status } = useSession();
   const [symptoms, setSymptoms] = useState('');
   const [image, setImage] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const supabase = createClient();
 
@@ -371,26 +497,31 @@ export default function AnalyzePage() {
   };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">Symptom Analysis</h1>
-      
-      <Card>
+    <div className="container mx-auto px-4 py-8">
+      <Card className="w-full max-w-4xl mx-auto">
         <CardHeader>
-          <CardTitle>Describe Your Symptoms</CardTitle>
+          <CardTitle>Symptom Analysis</CardTitle>
           <CardDescription>
-            Enter your symptoms and upload any relevant images for AI-powered analysis
+            Describe your symptoms in detail for AI-powered analysis and doctor recommendations
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="symptoms">Symptoms Description</Label>
-            <Textarea
-              id="symptoms"
-              placeholder="Describe your symptoms in detail..."
-              value={symptoms}
-              onChange={(e) => setSymptoms(e.target.value)}
-              className="min-h-[150px]"
-            />
+            <Label htmlFor="symptoms">Symptoms</Label>
+            <div className="flex gap-2">
+              <Textarea
+                id="symptoms"
+                placeholder="Describe your symptoms in detail..."
+                value={symptoms}
+                onChange={(e) => setSymptoms(e.target.value)}
+                className="min-h-[100px]"
+              />
+              <VoiceInput
+                onTranscript={setSymptoms}
+                isRecording={isRecording}
+                setIsRecording={setIsRecording}
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
