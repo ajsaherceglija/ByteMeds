@@ -259,7 +259,7 @@ IMPORTANT: Respond in this exact JSON format, with no additional text:
         const base64Image = Buffer.from(imageBuffer).toString('base64');
 
         const imageResponse = await openai.chat.completions.create({
-          model: "gpt-4-vision-preview",
+          model: "gpt-3.5-turbo",
           messages: [
             {
               role: "user",
