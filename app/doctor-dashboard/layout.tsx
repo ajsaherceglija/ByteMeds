@@ -12,17 +12,20 @@ import {
   Stethoscope,
   Menu,
   X,
+  Icon,
+  User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { UserNav } from '../../components/layout/user-nav';
 
 const navItems = [
   { href: '/doctor-dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/doctor-dashboard/profile', label: 'Profile', icon: User },
   { href: '/doctor-dashboard/patients', label: 'Patients', icon: Users },
   { href: '/doctor-dashboard/appointments', label: 'Appointments', icon: Calendar },
   { href: '/doctor-dashboard/medical-records', label: 'Medical Records', icon: FileText },
   { href: '/doctor-dashboard/prescriptions', label: 'Prescriptions', icon: Pill },
-  { href: '/doctor-dashboard/consultations', label: 'Consultations', icon: Stethoscope },
 ];
 
 export default function DoctorDashboardLayout({
@@ -71,6 +74,11 @@ export default function DoctorDashboardLayout({
               );
             })}
           </nav>
+
+          {/* User Profile */}
+          <div className="mt-auto border-t p-4 z-50">
+            <UserNav />
+          </div>
         </div>
       </aside>
 

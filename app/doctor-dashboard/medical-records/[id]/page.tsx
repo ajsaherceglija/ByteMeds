@@ -1,6 +1,8 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { format } from 'date-fns';
 import { FileText, User, ArrowLeft, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,62 +13,355 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 import Link from 'next/link';
+import { createClient } from '@/app/utils/supabase/client';
+import { Database } from '@/types/supabase';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { toast } from 'sonner';
 
-// Mock data - replace with actual API calls
-const mockMedicalRecords = [
-  {
-    id: 1,
-    patientName: 'John Doe',
-    recordType: 'Lab Results',
-    date: '2024-03-15T10:00:00Z',
-    description: 'Blood work analysis',
-    status: 'completed',
-    patientDetails: {
-      age: 35,
-      contact: '+1 234-567-8900',
-      email: 'john.doe@email.com'
-    },
-    results: {
-      bloodPressure: '120/80',
-      heartRate: '72 bpm',
-      temperature: '98.6°F',
-      bloodSugar: '95 mg/dL'
-    },
-    doctorNotes: 'All results within normal range. Follow-up in 6 months.',
-    attachments: [
-      { name: 'Blood Work Report.pdf', type: 'PDF', size: '2.4 MB' },
-      { name: 'Lab Analysis.pdf', type: 'PDF', size: '1.8 MB' }
-    ]
-  },
-  {
-    id: 2,
-    patientName: 'Jane Smith',
-    recordType: 'Imaging',
-    date: '2024-03-14T14:30:00Z',
-    description: 'Chest X-ray results',
-    status: 'pending',
-    patientDetails: {
-      age: 28,
-      contact: '+1 234-567-8901',
-      email: 'jane.smith@email.com'
-    },
-    results: {
-      findings: 'Awaiting radiologist report',
-      preliminaryNotes: 'Initial scan completed'
-    },
-    doctorNotes: 'Awaiting final analysis from radiology department',
-    attachments: [
-      { name: 'Chest X-ray.jpg', type: 'Image', size: '5.2 MB' }
-    ]
-  }
+const recordTypes = [
+  'Lab Results',
+  'Imaging',
+  'Prescription',
+  'Consultation Notes',
+  'Vaccination Record',
+  'Surgery Report',
+  'Other'
 ];
+
+type MedicalRecord = {
+  id: string;
+  patient_id: string | null;
+  doctor_id: string | null;
+  record_type: string | null;
+  description: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  is_active: boolean | null;
+  patient_name?: string;
+  patient_details?: {
+    email: string;
+    phone: string;
+    DOB: string | null;
+  };
+};
+
+const formSchema = z.object({
+  record_type: z.string({ required_error: 'Please select record type' }),
+  description: z.string().min(1, 'Description is required'),
+  notes: z.string().optional(),
+  is_active: z.boolean().optional(),
+});
+
+type UpdateRecordModalProps = {
+  open: boolean;
+  onClose: () => void;
+  record: MedicalRecord;
+  onUpdate: (data: z.infer<typeof formSchema>) => void;
+};
+
+function UpdateRecordModal({ open, onClose, record, onUpdate }: UpdateRecordModalProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      record_type: record.record_type || '',
+      description: record.description || '',
+      notes: record.notes || '',
+      is_active: record.is_active ?? true,
+    },
+  });
+
+  // Reset form when record changes
+  useEffect(() => {
+    if (record) {
+      form.reset({
+        record_type: record.record_type || '',
+        description: record.description || '',
+        notes: record.notes || '',
+        is_active: record.is_active ?? true,
+      });
+    }
+  }, [record, form]);
+
+  const onSubmit = async (data: z.infer<typeof formSchema>) => {
+    try {
+      setIsSubmitting(true);
+      await onUpdate(data);
+      form.reset();
+      onClose();
+    } catch (error) {
+      console.error('Error updating record:', error);
+      toast.error('Failed to update record');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>Update Medical Record</DialogTitle>
+          <DialogDescription>
+            Update the details of this medical record.
+          </DialogDescription>
+        </DialogHeader>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="record_type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Record Type</FormLabel>
+                  <FormControl>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select record type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {recordTypes.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Enter record description..."
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Additional Notes (Optional)</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Add any additional notes..."
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="is_active"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <FormControl>
+                    <Select 
+                      onValueChange={(value) => field.onChange(value === 'true')} 
+                      value={field.value ? 'true' : 'false'}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="true">Active</SelectItem>
+                        <SelectItem value="false">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <DialogFooter>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={onClose}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Updating...' : 'Update Record'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default function MedicalRecordDetailsPage() {
   const params = useParams();
-  const recordId = Number(params.id);
-  
-  const record = mockMedicalRecords.find(r => r.id === recordId);
+  const router = useRouter();
+  const { data: session, status } = useSession();
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [record, setRecord] = useState<MedicalRecord | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
+
+  // Initialize Supabase client on the client side only
+  useEffect(() => {
+    setSupabase(createClient());
+  }, []);
+
+  useEffect(() => {
+    const fetchMedicalRecord = async () => {
+      if (!session?.user?.id || !supabase || !params.id) return;
+
+      try {
+        const { data: recordData, error: recordError } = await supabase
+          .from('medical_records')
+          .select(`
+            *,
+            patients!medical_records_patient_id_fkey (
+              users!patients_id_fkey (
+                name,
+                email,
+                phone,
+                DOB
+              )
+            )
+          `)
+          .eq('id', params.id)
+          .eq('doctor_id', session.user.id)
+          .single();
+
+        if (recordError) {
+          console.error('Error fetching record:', recordError);
+          toast.error('Failed to load medical record');
+          return;
+        }
+
+        if (!recordData) {
+          toast.error('Medical record not found');
+          return;
+        }
+
+        const transformedRecord: MedicalRecord = {
+          ...recordData,
+          patient_name: recordData.patients?.users?.name || 'Unknown Patient',
+          patient_details: {
+            email: recordData.patients?.users?.email || 'N/A',
+            phone: recordData.patients?.users?.phone || 'N/A',
+            DOB: recordData.patients?.users?.DOB || null,
+          }
+        };
+
+        setRecord(transformedRecord);
+      } catch (error) {
+        console.error('Error:', error);
+        toast.error('Failed to load medical record');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchMedicalRecord();
+  }, [session, supabase, params.id]);
+
+  const handleUpdateRecord = async (data: z.infer<typeof formSchema>) => {
+    if (!session?.user?.id || !supabase || !record) {
+      toast.error('Unable to update record');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('medical_records')
+        .update({
+          record_type: data.record_type,
+          description: data.description,
+          notes: data.notes || null,
+          is_active: data.is_active,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', record.id)
+        .eq('doctor_id', session.user.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setRecord(prev => prev ? {
+        ...prev,
+        record_type: data.record_type,
+        description: data.description,
+        notes: data.notes || null,
+        is_active: data.is_active || false,
+        updated_at: new Date().toISOString()
+      } : null);
+
+      toast.success('Medical record updated successfully');
+    } catch (error) {
+      console.error('Error updating record:', error);
+      toast.error('Failed to update medical record');
+    }
+  };
+
+  // Show loading state while session is loading
+  if (status === 'loading' || isLoading) {
+    return <div className="flex justify-center items-center min-h-screen">Loading...</div>;
+  }
+
+  // If no session and not loading, redirect to login
+  if (!session?.user?.id) {
+    router.push('/login');
+    return null;
+  }
 
   if (!record) {
     return (
@@ -113,11 +408,11 @@ export default function MedicalRecordDetailsPage() {
           <CardContent className="space-y-4">
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">{record.recordType}</span>
+              <span className="font-medium">{record.record_type}</span>
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span>{format(new Date(record.date), 'PPP')}</span>
+              <span>{format(new Date(record.created_at), 'PPP')}</span>
             </div>
             <div>
               <p className="text-sm font-medium">Description</p>
@@ -127,14 +422,20 @@ export default function MedicalRecordDetailsPage() {
               <p className="text-sm font-medium">Status</p>
               <span
                 className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                  record.status === 'completed'
+                  record.is_active
                     ? 'bg-green-100 text-green-700'
-                    : 'bg-yellow-100 text-yellow-700'
+                    : 'bg-gray-100 text-gray-700'
                 }`}
               >
-                {record.status}
+                {record.is_active ? 'Active' : 'Inactive'}
               </span>
             </div>
+            {record.notes && (
+              <div>
+                <p className="text-sm font-medium">Notes</p>
+                <p className="text-sm text-muted-foreground">{record.notes}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -145,90 +446,44 @@ export default function MedicalRecordDetailsPage() {
           <CardContent className="space-y-4">
             <div className="flex items-center gap-2">
               <User className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">{record.patientName}</span>
+              <span className="font-medium">{record.patient_name}</span>
             </div>
-            <div>
-              <p className="text-sm font-medium">Age</p>
-              <p className="text-sm text-muted-foreground">
-                {record.patientDetails.age} years
-              </p>
-            </div>
+            {record.patient_details?.DOB && (
+              <div>
+                <p className="text-sm font-medium">Date of Birth</p>
+                <p className="text-sm text-muted-foreground">
+                  {format(new Date(record.patient_details.DOB), 'PPP')}
+                </p>
+              </div>
+            )}
             <div>
               <p className="text-sm font-medium">Contact</p>
               <p className="text-sm text-muted-foreground">
-                {record.patientDetails.contact}
+                {record.patient_details?.phone}
               </p>
             </div>
             <div>
               <p className="text-sm font-medium">Email</p>
               <p className="text-sm text-muted-foreground">
-                {record.patientDetails.email}
+                {record.patient_details?.email}
               </p>
             </div>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Results & Notes</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {record.results && (
-              <div>
-                <p className="text-sm font-medium">Results</p>
-                {Object.entries(record.results).map(([key, value]) => (
-                  <div key={key} className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{key}:</span>
-                    <span>{value}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div>
-              <p className="text-sm font-medium">Doctor's Notes</p>
-              <p className="text-sm text-muted-foreground">{record.doctorNotes}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Attachments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {record.attachments.map((attachment, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between rounded-lg border p-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm font-medium">{attachment.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {attachment.type} • {attachment.size}
-                      </p>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    Download
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
-      <div className="flex gap-4">
-        <Button>
+      <div className="flex justify-start">
+        <Button onClick={() => setIsUpdateModalOpen(true)}>
           Update Record
         </Button>
-        <Button variant="outline">
-          Print Record
-        </Button>
       </div>
+
+      <UpdateRecordModal
+        open={isUpdateModalOpen}
+        onClose={() => setIsUpdateModalOpen(false)}
+        record={record}
+        onUpdate={handleUpdateRecord}
+      />
     </div>
   );
 } 
