@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, Clock, User } from 'lucide-react';
@@ -14,48 +14,108 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { BookAppointmentModal } from './components/book-appointment-modal';
+import { createClient } from '@/app/utils/supabase/client';
+import { toast } from '@/components/ui/use-toast';
 
-// Mock data - replace with actual API calls
-const mockAppointments = [
-  {
-    id: 1,
-    patientName: 'John Doe',
-    doctorName: 'Dr. Smith',
-    date: '2024-03-20T10:00:00Z',
-    duration: 30,
-    type: 'Check-up',
-    status: 'upcoming',
-  },
-  {
-    id: 2,
-    patientName: 'Jane Smith',
-    doctorName: 'Dr. Johnson',
-    date: '2024-03-20T14:30:00Z',
-    duration: 45,
-    type: 'Follow-up',
-    status: 'upcoming',
-  },
-  {
-    id: 3,
-    patientName: 'Alice Brown',
-    doctorName: 'Dr. Smith',
-    date: '2024-03-19T09:00:00Z',
-    duration: 30,
-    type: 'Consultation',
-    status: 'completed',
-  },
-];
+interface Appointment {
+  id: string;
+  patient_id: string;
+  doctor_id: string;
+  appointment_date: string;
+  duration: number;
+  type: string;
+  status: string;
+  notes: string | null;
+  doctor_name?: string;
+  patient_name?: string;
+}
 
 export default function AppointmentsPage() {
   const { data: session } = useSession();
   const isDoctor = session?.user?.is_doctor;
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const supabase = createClient();
 
-  const filteredAppointments = mockAppointments.filter(
+  const fetchAppointments = useCallback(async () => {
+    // Skip if already loaded or no session
+    if (hasLoaded || !session?.user?.id) return;
+
+    try {
+      setIsLoading(true);
+      
+      // Fetch appointments
+      const { data: appointmentsData, error: appointmentsError } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq(isDoctor ? 'doctor_id' : 'patient_id', session.user.id)
+        .order('appointment_date', { ascending: true });
+
+      if (appointmentsError) {
+        throw appointmentsError;
+      }
+
+      // Fetch user details for each appointment
+      const appointmentsWithNames = await Promise.all((appointmentsData || []).map(async (appointment) => {
+        const userId = isDoctor ? appointment.patient_id : appointment.doctor_id;
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', userId)
+          .single();
+
+        if (userError) {
+          console.warn('Error fetching user details:', userError);
+          return {
+            ...appointment,
+            doctor_name: isDoctor ? session.user.name : 'Unknown Doctor',
+            patient_name: isDoctor ? 'Unknown Patient' : session.user.name
+          };
+        }
+
+        return {
+          ...appointment,
+          doctor_name: isDoctor ? session.user.name : userData.name,
+          patient_name: isDoctor ? userData.name : session.user.name
+        };
+      }));
+
+      setAppointments(appointmentsWithNames);
+      setHasLoaded(true);
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load appointments',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [session, isDoctor, supabase, hasLoaded]);
+
+  // Reset hasLoaded when session or isDoctor changes
+  useEffect(() => {
+    setHasLoaded(false);
+  }, [session?.user?.id, isDoctor]);
+
+  // Fetch appointments when needed
+  useEffect(() => {
+    fetchAppointments();
+  }, [fetchAppointments]);
+
+  // Function to manually refresh appointments
+  const refreshAppointments = useCallback(() => {
+    setHasLoaded(false); // This will trigger a new fetch
+  }, []);
+
+  const filteredAppointments = appointments.filter(
     (appointment) =>
       selectedDate &&
-      format(new Date(appointment.date), 'yyyy-MM-dd') ===
+      format(new Date(appointment.appointment_date), 'yyyy-MM-dd') ===
         format(selectedDate, 'yyyy-MM-dd')
   );
 
@@ -68,84 +128,92 @@ export default function AppointmentsPage() {
             Manage your {isDoctor ? 'patient appointments' : 'medical appointments'}
           </p>
         </div>
-        <Button onClick={() => setIsBookingModalOpen(true)}>
-          {isDoctor ? 'Schedule Appointment' : 'Book Appointment'}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={refreshAppointments} disabled={isLoading}>
+            Refresh
+          </Button>
+          <Button onClick={() => setIsBookingModalOpen(true)}>
+            {isDoctor ? 'Schedule Appointment' : 'Book Appointment'}
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-[1fr_300px]">
-        {/* Appointments List */}
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {selectedDate
-                  ? format(selectedDate, 'MMMM d, yyyy')
-                  : 'Select a date'}
-              </CardTitle>
-              <CardDescription>
-                {filteredAppointments.length
-                  ? `${filteredAppointments.length} appointments scheduled`
-                  : 'No appointments scheduled'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {filteredAppointments.map((appointment) => (
-                  <div
-                    key={appointment.id}
-                    className="flex items-center justify-between rounded-lg border p-4"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        <p className="font-medium">
-                          {isDoctor
-                            ? appointment.patientName
-                            : appointment.doctorName}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Clock className="h-4 w-4" />
-                        <span>
-                          {format(new Date(appointment.date), 'h:mm a')} (
-                          {appointment.duration} mins)
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                            appointment.status === 'upcoming'
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-green-100 text-green-700'
-                          }`}
-                        >
-                          {appointment.status}
-                        </span>
-                        <span className="text-sm text-muted-foreground">
-                          {appointment.type}
-                        </span>
-                      </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {selectedDate
+                ? format(selectedDate, 'MMMM d, yyyy')
+                : 'Select a date'}
+            </CardTitle>
+            <CardDescription>
+              {isLoading 
+                ? 'Loading appointments...'
+                : filteredAppointments.length
+                ? `${filteredAppointments.length} appointments scheduled`
+                : 'No appointments scheduled'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {filteredAppointments.map((appointment) => (
+                <div
+                  key={appointment.id}
+                  className="flex items-center justify-between rounded-lg border p-4"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <p className="font-medium">
+                        {isDoctor ? appointment.patient_name : appointment.doctor_name}
+                      </p>
                     </div>
-                    <Button variant="outline" size="sm" asChild>
-                      {/* Replace Link with Button for new modal */}
-                      <Button onClick={() => setIsBookingModalOpen(true)}>
-                        View Details
-                      </Button>
-                    </Button>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Clock className="h-4 w-4" />
+                      <span>
+                        {format(new Date(appointment.appointment_date), 'h:mm a')} (
+                        {appointment.duration} mins)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                          appointment.status === 'scheduled'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-green-100 text-green-700'
+                        }`}
+                      >
+                        {appointment.status}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        {appointment.type}
+                      </span>
+                    </div>
                   </div>
-                ))}
-                {filteredAppointments.length === 0 && (
-                  <p className="text-center text-sm text-muted-foreground">
-                    No appointments scheduled for this date.
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      // TODO: Implement view details functionality
+                      toast({
+                        title: 'Coming Soon',
+                        description: 'Appointment details view is under development',
+                      });
+                    }}
+                  >
+                    View Details
+                  </Button>
+                </div>
+              ))}
+              {!isLoading && filteredAppointments.length === 0 && (
+                <p className="text-center text-sm text-muted-foreground">
+                  No appointments scheduled for this date.
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* Calendar */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -166,7 +234,10 @@ export default function AppointmentsPage() {
 
       <BookAppointmentModal
         open={isBookingModalOpen}
-        onClose={() => setIsBookingModalOpen(false)}
+        onClose={() => {
+          setIsBookingModalOpen(false);
+          refreshAppointments(); // Refresh appointments after booking
+        }}
       />
     </div>
   );

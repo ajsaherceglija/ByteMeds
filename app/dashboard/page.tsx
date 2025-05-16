@@ -193,11 +193,6 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/dashboard/appointments/${appointment.id}`}>
-                      View Details
-                    </Link>
-                  </Button>
                 </div>
               ))}
             </div>
