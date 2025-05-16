@@ -190,19 +190,7 @@ export default function AppointmentsPage() {
                       </span>
                     </div>
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      // TODO: Implement view details functionality
-                      toast({
-                        title: 'Coming Soon',
-                        description: 'Appointment details view is under development',
-                      });
-                    }}
-                  >
-                    View Details
-                  </Button>
+                  
                 </div>
               ))}
               {!isLoading && filteredAppointments.length === 0 && (
