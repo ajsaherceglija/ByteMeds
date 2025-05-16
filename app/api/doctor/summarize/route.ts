@@ -49,10 +49,23 @@ async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
 // Function to extract text from DOCX
 async function extractDocxText(buffer: ArrayBuffer): Promise<string> {
   try {
-    const result = await mammoth.extractRawText({ arrayBuffer: buffer });
+    // Convert ArrayBuffer to Buffer for mammoth
+    const nodeBuffer = Buffer.from(buffer);
+    
+    const result = await mammoth.extractRawText({
+      buffer: nodeBuffer
+    });
+
+    if (!result.value) {
+      throw new Error('No text content found in DOCX file');
+    }
+
     return result.value.trim();
   } catch (error) {
     console.error('Error extracting DOCX text:', error);
+    if (error instanceof Error) {
+      throw new Error(`Failed to read DOCX content: ${error.message}`);
+    }
     throw new Error('Failed to read DOCX content');
   }
 }
@@ -62,6 +75,8 @@ async function extractText(file: File): Promise<string> {
   try {
     const buffer = await file.arrayBuffer();
     const fileType = file.type;
+    
+    console.log(`Processing file: ${file.name}, type: ${fileType}, size: ${buffer.byteLength} bytes`);
     
     switch (fileType) {
       case 'application/pdf':
@@ -80,7 +95,8 @@ async function extractText(file: File): Promise<string> {
         throw new Error(`Unsupported file type: ${fileType}`);
     }
   } catch (error: any) {
-    throw new Error(`Error processing ${file.name}: ${error.message}`);
+    console.error(`Error processing ${file.name}:`, error);
+    throw error; // Preserve the original error message
   }
 }
 
