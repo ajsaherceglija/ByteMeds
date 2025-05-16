@@ -257,9 +257,6 @@ export default function AnalyzePage() {
       // Prepare the data for analysis
       const formData = new FormData();
       formData.append('symptoms', symptoms);
-      if (image) {
-        formData.append('image', image);
-      }
       formData.append('specialties', JSON.stringify(specialties.map(d => d.specialty)));
 
       // Send to our API endpoint
@@ -278,39 +275,12 @@ export default function AnalyzePage() {
         throw new Error('Network error while connecting to analysis service');
       }
 
-      let errorData;
-      try {
-        errorData = await response.json();
-      } catch (parseError) {
-        console.error('Error parsing response:', parseError);
-        errorData = {};
-      }
-
       if (!response.ok) {
-        console.error('Analysis API error:', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorData,
-          headers: Object.fromEntries(response.headers.entries())
-        });
-        
-        if (response.status === 404) {
-          throw new Error('The analysis service is currently unavailable. Please try again later.');
-        } else if (response.status === 429) {
-          throw new Error('The service is currently busy. Please try again in a few minutes.');
-        } else if (response.status === 500) {
-          throw new Error('Internal server error. Please try again later.');
-        } else {
-          throw new Error(errorData.error || `Analysis failed (${response.status}). Please try again.`);
-        }
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Analysis failed (${response.status}). Please try again.`);
       }
 
-      if (!errorData || typeof errorData !== 'object') {
-        console.error('Invalid response format:', errorData);
-        throw new Error('Received invalid response from analysis service');
-      }
-
-      const analysisResult = errorData;
+      const analysisResult = await response.json();
 
       // Fetch recommended doctors
       console.log('Starting doctors fetch...');
@@ -553,7 +523,7 @@ export default function AnalyzePage() {
       </Card>
 
       {result && (
-        <Card>
+        <Card className="mt-8">
           <CardHeader>
             <CardTitle>Clinical Analysis Results</CardTitle>
             {result._fallback && (
