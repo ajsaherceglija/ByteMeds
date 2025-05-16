@@ -14,6 +14,7 @@ import {
   LineChart,
   Menu,
   X,
+  Brain,
 } from 'lucide-react';
 import { UserNav } from './user-nav';
 import { cn } from '../../lib/utils';
@@ -33,6 +34,7 @@ const patientNavItems = [
   { href: '/dashboard/medical-history', label: 'Medical History', icon: FileText },
   { href: '/dashboard/medications', label: 'Medications', icon: Pill },
   { href: '/dashboard/parameters', label: 'Parameters', icon: LineChart },
+  { href: '/dashboard/analyze', label: 'Analyze', icon: Brain },
 ];
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
