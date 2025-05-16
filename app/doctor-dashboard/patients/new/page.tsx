@@ -21,6 +21,8 @@ import {
 } from '@/components/ui/select';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { useToast } from '@/components/ui/use-toast';
+import { createPatient } from '../actions';
 
 interface PatientFormData {
   name: string;
@@ -36,6 +38,8 @@ interface PatientFormData {
 
 export default function NewPatientPage() {
   const router = useRouter();
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<PatientFormData>({
     name: '',
     email: '',
@@ -57,12 +61,25 @@ export default function NewPatientPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     
-    // Here you would typically make an API call to save the patient data
-    console.log('Submitting patient data:', formData);
-    
-    // Mock success - in real app, this would happen after successful API call
-    router.push('/doctor-dashboard/patients');
+    try {
+      const result = await createPatient(formData);
+      toast({
+        title: "Success",
+        description: "Patient has been added successfully",
+      });
+      router.push('/doctor-dashboard/patients');
+    } catch (error) {
+      console.error('Failed to create patient:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create patient",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -223,11 +240,14 @@ export default function NewPatientPage() {
         </Card>
 
         <div className="flex gap-4">
-          <Button type="submit">Add Patient</Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Adding Patient...' : 'Add Patient'}
+          </Button>
           <Button
             type="button"
             variant="outline"
             onClick={() => router.push('/doctor-dashboard/patients')}
+            disabled={isSubmitting}
           >
             Cancel
           </Button>

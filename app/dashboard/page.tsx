@@ -37,7 +37,7 @@ interface DashboardData {
 }
 
 export default function DashboardPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [dashboardData, setDashboardData] = useState<DashboardData>({
     activeAppointments: [],
     nextCheckup: null,
@@ -49,6 +49,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const fetchDashboardData = async () => {
+      if (status === 'loading') {
+        return;
+      }
+
       if (!session?.user?.id) {
         console.error('No session or user ID available');
         setIsLoading(false);
@@ -148,9 +152,26 @@ export default function DashboardPage() {
     };
 
     fetchDashboardData();
-  }, [session]);
+  }, [session, status]);
 
-  if (!session) return null;
+  if (status === 'loading' || isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <h1 className="text-2xl font-bold mb-4">Please sign in to view your dashboard</h1>
+        <Button asChild>
+          <Link href="/auth/signin">Sign In</Link>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

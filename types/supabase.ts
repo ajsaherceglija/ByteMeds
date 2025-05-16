@@ -251,16 +251,22 @@ export interface Database {
           id: string
           prescription_id: string | null
           medication_id: string | null
+          dosage: string | null
+          frequency: string | null
         }
         Insert: {
           id?: string
           prescription_id?: string | null
           medication_id?: string | null
+          dosage?: string | null
+          frequency?: string | null
         }
         Update: {
           id?: string
           prescription_id?: string | null
           medication_id?: string | null
+          dosage?: string | null
+          frequency?: string | null
         }
       }
 

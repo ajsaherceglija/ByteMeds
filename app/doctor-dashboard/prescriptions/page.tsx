@@ -1,16 +1,14 @@
 'use client';
 
-import { useState } from 'react';
-import { format } from 'date-fns';
-import { Pill, Search, User, Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useEffect, useState } from 'react';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
+} from '../../../components/ui/card';
+import { Button } from '../../../components/ui/button';
 import {
   Table,
   TableBody,
@@ -18,78 +16,72 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from '../../../components/ui/table';
+import { Badge } from '../../../components/ui/badge';
+import { Plus } from 'lucide-react';
 import Link from 'next/link';
-
-// Mock data - replace with actual API calls
-const mockPrescriptions = [
-  {
-    id: 1,
-    patientName: 'John Doe',
-    medications: [
-      {
-        name: 'Amoxicillin',
-        dosage: '500mg',
-        frequency: '3 times daily',
-        duration: '7 days',
-      },
-    ],
-    date: '2024-03-15T10:00:00Z',
-    status: 'active',
-  },
-  {
-    id: 2,
-    patientName: 'Jane Smith',
-    medications: [
-      {
-        name: 'Ibuprofen',
-        dosage: '400mg',
-        frequency: 'As needed',
-        duration: '14 days',
-      },
-      {
-        name: 'Omeprazole',
-        dosage: '20mg',
-        frequency: 'Once daily',
-        duration: '14 days',
-      },
-    ],
-    date: '2024-03-14T14:30:00Z',
-    status: 'active',
-  },
-  {
-    id: 3,
-    patientName: 'Alice Brown',
-    medications: [
-      {
-        name: 'Ciprofloxacin',
-        dosage: '250mg',
-        frequency: 'Twice daily',
-        duration: '5 days',
-      },
-    ],
-    date: '2024-03-10T09:00:00Z',
-    status: 'completed',
-  },
-];
+import { getPrescriptions, type Prescription } from './actions';
 
 export default function PrescriptionsPage() {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredPrescriptions = mockPrescriptions.filter(prescription =>
-    prescription.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    prescription.medications.some(med => 
-      med.name.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  );
+  useEffect(() => {
+    loadPrescriptions();
+  }, []);
+
+  async function loadPrescriptions() {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getPrescriptions();
+      setPrescriptions(data);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load prescriptions';
+      setError(errorMessage);
+      console.error('Error loading prescriptions:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function getStatusColor(status: string) {
+    switch (status.toLowerCase()) {
+      case 'active':
+        return 'bg-green-500';
+      case 'pending':
+        return 'bg-yellow-500';
+      case 'expired':
+        return 'bg-red-500';
+      default:
+        return 'bg-gray-500';
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-lg">Loading prescriptions...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-lg text-red-500">{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Prescriptions</h1>
           <p className="text-muted-foreground">
-            Manage and write prescriptions for patients
+            Manage and view all prescriptions
           </p>
         </div>
         <Button asChild>
@@ -104,70 +96,46 @@ export default function PrescriptionsPage() {
         <CardHeader>
           <CardTitle>All Prescriptions</CardTitle>
           <CardDescription>
-            {filteredPrescriptions.length} prescriptions found
+            View and manage all prescriptions for your patients
           </CardDescription>
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <input
-                placeholder="Search prescriptions..."
-                className="w-full rounded-md border border-input pl-8 pr-2 py-2 text-sm"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Patient</TableHead>
-                <TableHead>Medications</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>Valid Until</TableHead>
+                <TableHead>Medications</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredPrescriptions.map((prescription) => (
+              {prescriptions.map((prescription) => (
                 <TableRow key={prescription.id}>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-muted-foreground" />
-                      <span>{prescription.patientName}</span>
-                    </div>
-                  </TableCell>
+                  <TableCell>{prescription.patientName}</TableCell>
+                  <TableCell>{prescription.date}</TableCell>
                   <TableCell>
-                    <div className="space-y-1">
-                      {prescription.medications.map((medication, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center gap-2 text-sm"
-                        >
-                          <Pill className="h-4 w-4 text-muted-foreground" />
-                          <span>
-                            {medication.name} ({medication.dosage}) -{' '}
-                            {medication.frequency}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell>{format(new Date(prescription.date), 'PPP')}</TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                        prescription.status === 'active'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-700'
-                      }`}
-                    >
+                    <Badge className={getStatusColor(prescription.status)}>
                       {prescription.status}
-                    </span>
+                    </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="outline" size="sm" asChild>
+                  <TableCell>{prescription.validUntil}</TableCell>
+                  <TableCell>
+                    {prescription.medications.map((med, index) => (
+                      <span key={index}>
+                        {med.name}
+                        {index < prescription.medications.length - 1 ? ', ' : ''}
+                      </span>
+                    ))}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      asChild
+                    >
                       <Link href={`/doctor-dashboard/prescriptions/${prescription.id}`}>
                         View Details
                       </Link>
