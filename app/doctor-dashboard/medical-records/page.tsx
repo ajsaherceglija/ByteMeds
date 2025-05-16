@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { FileText, Search, User, Plus, Calendar } from 'lucide-react';
@@ -28,59 +28,113 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { createClient } from '@/app/utils/supabase/client';
+import { Database } from '@/types/supabase';
+import { SupabaseClient } from '@supabase/supabase-js';
 
-// Mock data - replace with actual API calls
-const mockMedicalRecords = [
-  {
-    id: 1,
-    patientName: 'John Doe',
-    recordType: 'Lab Results',
-    date: '2024-03-15T10:00:00Z',
-    description: 'Blood work analysis',
-    status: 'completed',
-    isActive: true,
-  },
-  {
-    id: 2,
-    patientName: 'Jane Smith',
-    recordType: 'Imaging',
-    date: '2024-03-14T14:30:00Z',
-    description: 'Chest X-ray results',
-    status: 'pending',
-    isActive: true,
-  },
-  {
-    id: 3,
-    patientName: 'Alice Brown',
-    recordType: 'Treatment Plan',
-    date: '2024-03-10T09:00:00Z',
-    description: 'Physiotherapy schedule',
-    status: 'pending',
-    isActive: false,
-  },
-];
+type MedicalRecord = Database['public']['Tables']['medical_records']['Row'] & {
+  patient_name?: string;
+};
 
 export default function MedicalRecordsPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [searchQuery, setSearchQuery] = useState('');
   const [patientStatus, setPatientStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [records, setRecords] = useState<MedicalRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
 
-  const filteredRecords = mockMedicalRecords.filter(record => {
+  console.log('Session status:', status);
+  console.log('Session data:', session);
+
+  // Initialize Supabase client on the client side only
+  useEffect(() => {
+    setSupabase(createClient());
+  }, []);
+
+  // Handle authentication
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    }
+  }, [status, router]);
+
+  // Fetch medical records
+  useEffect(() => {
+    const fetchMedicalRecords = async () => {
+      if (!session?.user?.id || !supabase) {
+        return;
+      }
+
+      try {
+        console.log('Fetching medical records for doctor:', session.user.id);
+        const { data: medicalRecords, error } = await supabase
+          .from('medical_records')
+          .select(`
+            *,
+            patients!medical_records_patient_id_fkey (
+              users!patients_id_fkey (
+                name
+              )
+            )
+          `)
+          .eq('doctor_id', session.user.id);
+
+        if (error) {
+          console.error('Supabase error:', error);
+          throw error;
+        }
+
+        console.log('Fetched records:', medicalRecords);
+
+        const transformedRecords = medicalRecords.map(record => ({
+          ...record,
+          patient_name: record.patients?.users?.name || 'Unknown Patient'
+        }));
+
+        console.log('Transformed records:', transformedRecords);
+        setRecords(transformedRecords);
+      } catch (error) {
+        console.error('Error fetching medical records:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchMedicalRecords();
+  }, [session, supabase]);
+
+  // Show loading state while session is loading
+  if (status === 'loading' || !supabase) {
+    return <div className="flex justify-center items-center min-h-screen">Loading...</div>;
+  }
+
+  // If no session and not loading, don't render anything
+  if (!session?.user?.id) {
+    return null;
+  }
+
+  const filteredRecords = records.filter(record => {
     const matchesSearch = 
-      record.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      record.recordType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      record.description.toLowerCase().includes(searchQuery.toLowerCase());
+      (record.patient_name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+      (record.record_type?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+      (record.description?.toLowerCase() || '').includes(searchQuery.toLowerCase());
     
     const matchesStatus = 
       patientStatus === 'all' || 
-      (patientStatus === 'active' && record.isActive) ||
-      (patientStatus === 'inactive' && !record.isActive);
+      (patientStatus === 'active' && record.is_active) ||
+      (patientStatus === 'inactive' && !record.is_active);
 
     return matchesSearch && matchesStatus;
   });
 
+  // Add debug log for filtered records
+  console.log('Filtered records:', filteredRecords);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" suppressHydrationWarning>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Medical Records</h1>
@@ -141,58 +195,72 @@ export default function MedicalRecordsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredRecords.map((record) => (
-                <TableRow key={record.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{record.patientName}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span>{record.recordType}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span>{format(new Date(record.date), 'PPP')}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{record.description}</TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                        record.status === 'completed'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-yellow-100 text-yellow-700'
-                      }`}
-                    >
-                      {record.status}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                        record.isActive
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-700'
-                      }`}
-                    >
-                      {record.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`/doctor-dashboard/medical-records/${record.id}`}>
-                        View Details
-                      </Link>
-                    </Button>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center">
+                    Loading records...
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : filteredRecords.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center">
+                    No records found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredRecords.map((record) => (
+                  <TableRow key={record.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{record.patient_name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <span>{record.record_type}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span>{format(new Date(record.created_at), 'PPP')}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{record.description}</TableCell>
+                    <TableCell>
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                          record.order_requested
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-green-100 text-green-700'
+                        }`}
+                      >
+                        {record.order_requested ? 'Pending' : 'Completed'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                          record.is_active
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        {record.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/doctor-dashboard/medical-records/${record.id}`}>
+                          Update Details
+                        </Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
