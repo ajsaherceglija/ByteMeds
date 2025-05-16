@@ -1,161 +1,169 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Search } from 'lucide-react';
-
-interface Doctor {
-  id: string;
-  name: string;
-  specialty: string;
-  hospital: string;
-}
-
-// Mock data - replace with actual API call
-const mockDoctors: Doctor[] = [
-  {
-    id: 'D001',
-    name: 'Dr. Sarah Johnson',
-    specialty: 'Cardiologist',
-    hospital: 'Central Hospital',
-  },
-  {
-    id: 'D002',
-    name: 'Dr. Michael Williams',
-    specialty: 'Neurologist',
-    hospital: 'City Medical Center',
-  },
-  {
-    id: 'D003',
-    name: 'Dr. Emily Brown',
-    specialty: 'Pediatrician',
-    hospital: 'Children\'s Hospital',
-  },
-  {
-    id: 'D004',
-    name: 'Dr. David Wilson',
-    specialty: 'Oncologist',
-    hospital: 'Cancer Research Center',
-  },
-  {
-    id: 'D005',
-    name: 'Dr. Jessica Martinez',
-    specialty: 'Dermatologist',
-    hospital: 'Skin Care Clinic',
-  },
-];
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/components/ui/use-toast';
+import { getDoctors, sharePatient, getSharedDoctors, Doctor } from '../actions';
+import { Share2, Stethoscope, Building2 } from 'lucide-react';
 
 interface SharePatientModalProps {
-  patientName: string;
   patientId: string;
+  patientName: string;
 }
 
-export function SharePatientModal({ patientName, patientId }: SharePatientModalProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDoctors, setSelectedDoctors] = useState<string[]>([]);
+export function SharePatientModal({ patientId, patientName }: SharePatientModalProps) {
   const [open, setOpen] = useState(false);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [selectedDoctors, setSelectedDoctors] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
-  const filteredDoctors = mockDoctors.filter(doctor =>
-    doctor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    doctor.specialty.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    doctor.hospital.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  useEffect(() => {
+    if (open) {
+      loadDoctors();
+    }
+  }, [open]);
 
-  const handleShare = async () => {
-    // Here you would make an API call to share the patient with selected doctors
-    console.log('Sharing patient', patientId, 'with doctors:', selectedDoctors);
-    
-    // Mock success - in real app, this would happen after successful API call
-    setOpen(false);
-    setSelectedDoctors([]);
+  const loadDoctors = async () => {
+    try {
+      const [doctorsList, sharedDoctors] = await Promise.all([
+        getDoctors(),
+        getSharedDoctors(patientId)
+      ]);
+      setDoctors(doctorsList);
+      setSelectedDoctors(sharedDoctors);
+    } catch (error) {
+      console.error('Failed to load doctors:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load doctors list",
+      });
+    }
   };
 
-  const toggleDoctor = (doctorId: string) => {
-    setSelectedDoctors(prev =>
-      prev.includes(doctorId)
-        ? prev.filter(id => id !== doctorId)
-        : [...prev, doctorId]
-    );
+  const handleShare = async () => {
+    if (selectedDoctors.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please select at least one doctor to share with",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await sharePatient(patientId, selectedDoctors);
+      toast({
+        title: "Success",
+        description: "Patient shared successfully",
+      });
+      setOpen(false);
+      setSelectedDoctors([]);
+    } catch (error) {
+      console.error('Failed to share patient:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to share patient",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">Share</Button>
+        <Button variant="outline" size="sm">
+          <Share2 className="h-4 w-4 mr-2" />
+          Share
+        </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Share Patient Record</DialogTitle>
+          <DialogTitle>Share Patient</DialogTitle>
           <DialogDescription>
-            Share {patientName}&apos;s medical record with other doctors
+            Share {patientName} with other doctors
           </DialogDescription>
         </DialogHeader>
-
-        <div className="space-y-4">
-          <div className="relative">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search doctors by name, specialty, or hospital..."
-              className="pl-8"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-
-          <div className="max-h-[400px] overflow-y-auto space-y-2">
-            {filteredDoctors.map((doctor) => (
+        <div className="grid gap-4 py-4">
+          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+            {doctors.map((doctor) => (
               <div
                 key={doctor.id}
-                className="flex items-center space-x-4 rounded-lg border p-4"
+                className={`flex items-start space-x-3 p-3 rounded-lg border transition-colors ${
+                  selectedDoctors.includes(doctor.id)
+                    ? 'bg-primary/5 border-primary/20'
+                    : 'hover:bg-muted/50'
+                }`}
               >
                 <Checkbox
                   id={doctor.id}
                   checked={selectedDoctors.includes(doctor.id)}
-                  onCheckedChange={() => toggleDoctor(doctor.id)}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedDoctors([...selectedDoctors, doctor.id]);
+                    } else {
+                      setSelectedDoctors(selectedDoctors.filter(id => id !== doctor.id));
+                    }
+                  }}
+                  className="mt-1"
                 />
-                <div className="flex-1">
-                  <label
-                    htmlFor={doctor.id}
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    {doctor.name}
-                  </label>
-                  <p className="text-sm text-muted-foreground">
-                    {doctor.specialty} • {doctor.hospital}
-                  </p>
-                </div>
+                <Label
+                  htmlFor={doctor.id}
+                  className="flex-1 cursor-pointer"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{doctor.name}</span>
+                    </div>
+                    <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+                      {doctor.specialty && (
+                        <div className="flex items-center gap-1.5">
+                          <Stethoscope className="h-3.5 w-3.5" />
+                          <span>{doctor.specialty}</span>
+                        </div>
+                      )}
+                      {doctor.hospital && (
+                        <div className="flex items-center gap-1.5">
+                          <Building2 className="h-3.5 w-3.5" />
+                          <span>{doctor.hospital}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Label>
               </div>
             ))}
-          </div>
-
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setOpen(false);
-                setSelectedDoctors([]);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleShare}
-              disabled={selectedDoctors.length === 0}
-            >
-              Share with Selected Doctors
-            </Button>
+            {doctors.length === 0 && (
+              <div className="text-center py-6 text-muted-foreground">
+                No doctors available to share with
+              </div>
+            )}
           </div>
         </div>
+        <DialogFooter>
+          <Button
+            type="submit"
+            onClick={handleShare}
+            disabled={isLoading || selectedDoctors.length === 0}
+          >
+            {isLoading ? 'Sharing...' : 'Share'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
