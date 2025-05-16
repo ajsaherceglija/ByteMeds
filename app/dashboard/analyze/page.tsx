@@ -137,21 +137,54 @@ export default function AnalyzePage() {
       formData.append('specialties', JSON.stringify(specialties.map(d => d.specialty)));
 
       // Send to our API endpoint
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        body: formData,
-      });
+      let response;
+      try {
+        response = await fetch('/api/analyze', {
+          method: 'POST',
+          body: formData,
+        });
+      } catch (fetchError: any) {
+        console.error('Network error during analysis:', {
+          error: fetchError,
+          message: fetchError.message,
+          stack: fetchError.stack
+        });
+        throw new Error('Network error while connecting to analysis service');
+      }
+
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (parseError) {
+        console.error('Error parsing response:', parseError);
+        errorData = {};
+      }
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Analysis failed');
+        console.error('Analysis API error:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+        
+        if (response.status === 404) {
+          throw new Error('The analysis service is currently unavailable. Please try again later.');
+        } else if (response.status === 429) {
+          throw new Error('The service is currently busy. Please try again in a few minutes.');
+        } else if (response.status === 500) {
+          throw new Error('Internal server error. Please try again later.');
+        } else {
+          throw new Error(errorData.error || `Analysis failed (${response.status}). Please try again.`);
+        }
       }
 
-      const analysisResult = await response.json();
-
-      if (!analysisResult || typeof analysisResult !== 'object') {
-        throw new Error('Invalid analysis response');
+      if (!errorData || typeof errorData !== 'object') {
+        console.error('Invalid response format:', errorData);
+        throw new Error('Received invalid response from analysis service');
       }
+
+      const analysisResult = errorData;
 
       // Fetch recommended doctors
       console.log('Starting doctors fetch...');
@@ -312,7 +345,9 @@ export default function AnalyzePage() {
       });
       
       // Show more specific error messages
-      if (error.message.includes('temporarily unavailable')) {
+      if (error.message.includes('Network error')) {
+        toast.error('Unable to connect to the analysis service. Please check your internet connection.');
+      } else if (error.message.includes('temporarily unavailable')) {
         toast.error('AI service is temporarily unavailable. Please try again later.');
       } else if (error.message.includes('configuration error')) {
         toast.error('Service configuration error. Please contact support.');
@@ -322,6 +357,8 @@ export default function AnalyzePage() {
         toast.error('Error accessing the database. Please try again later.');
       } else if (error.message.includes('Failed to fetch')) {
         toast.error(`Failed to fetch data: ${error.message}`);
+      } else if (error.message.includes('Invalid response')) {
+        toast.error('Received invalid response from the analysis service. Please try again.');
       } else {
         toast.error(error.message || 'Failed to analyze symptoms. Please try again.');
       }
