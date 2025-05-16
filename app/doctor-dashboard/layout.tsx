@@ -26,7 +26,6 @@ const navItems = [
   { href: '/doctor-dashboard/appointments', label: 'Appointments', icon: Calendar },
   { href: '/doctor-dashboard/medical-records', label: 'Medical Records', icon: FileText },
   { href: '/doctor-dashboard/prescriptions', label: 'Prescriptions', icon: Pill },
-  { href: '/doctor-dashboard/consultations', label: 'Consultations', icon: Stethoscope },
 ];
 
 export default function DoctorDashboardLayout({
