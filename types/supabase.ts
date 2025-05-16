@@ -15,6 +15,7 @@ export interface Database {
           email: string
           phone: string | null
           is_doctor: boolean
+          is_admin: boolean
           name: string
           DOB: string | null
           gender: string | null
@@ -28,6 +29,7 @@ export interface Database {
           email: string
           phone?: string | null
           is_doctor?: boolean
+          is_admin?: boolean
           name: string
           DOB?: string | null
           gender?: string | null
@@ -41,6 +43,7 @@ export interface Database {
           email?: string
           phone?: string | null
           is_doctor?: boolean
+          is_admin?: boolean
           name?: string
           DOB?: string | null
           gender?: string | null
@@ -396,6 +399,24 @@ export interface Database {
           relationship_type?: string | null
           started_at?: string | null
           notes?: string | null
+        }
+      }
+
+      system_settings: {
+        Row: {
+          key: string
+          value: Json
+          updated_at: string
+        }
+        Insert: {
+          key: string
+          value: Json
+          updated_at?: string
+        }
+        Update: {
+          key?: string
+          value?: Json
+          updated_at?: string
         }
       }
     }

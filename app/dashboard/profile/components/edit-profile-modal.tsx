@@ -80,7 +80,14 @@ export function EditProfileModal({
   });
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id) {
+      toast({
+        title: 'Error',
+        description: 'You must be logged in to update your profile.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -89,28 +96,34 @@ export function EditProfileModal({
         .from('users')
         .update({
           name: data.name,
-          phone: data.phone,
-          DOB: data.DOB,
-          gender: data.gender,
-          address: data.address,
-          city: data.city,
-          country: data.country,
+          phone: data.phone || null,
+          DOB: data.DOB || null,
+          gender: data.gender || null,
+          address: data.address || null,
+          city: data.city || null,
+          country: data.country || null,
         })
         .eq('id', session.user.id);
 
-      if (userError) throw userError;
+      if (userError) {
+        console.error('Error updating user data:', userError);
+        throw new Error(userError.message);
+      }
 
       // Update or insert patient table
       const { error: patientError } = await supabase
         .from('patients')
         .upsert({
           id: session.user.id,
-          blood_type: data.blood_type,
-          emergency_contact_name: data.emergency_contact_name,
-          emergency_contact_phone: data.emergency_contact_phone,
+          blood_type: data.blood_type || null,
+          emergency_contact_name: data.emergency_contact_name || null,
+          emergency_contact_phone: data.emergency_contact_phone || null,
         });
 
-      if (patientError) throw patientError;
+      if (patientError) {
+        console.error('Error updating patient data:', patientError);
+        throw new Error(patientError.message);
+      }
 
       toast({
         title: 'Success',
@@ -126,7 +139,7 @@ export function EditProfileModal({
       console.error('Error updating profile:', error);
       toast({
         title: 'Error',
-        description: 'Failed to update profile. Please try again.',
+        description: error.message || 'Failed to update profile. Please try again.',
         variant: 'destructive',
       });
     } finally {

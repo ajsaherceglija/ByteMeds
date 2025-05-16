@@ -113,26 +113,44 @@ interface DoctorAppointment {
 
 export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProps) {
   const { data: session, status } = useSession();
+  const [isLoading, setIsLoading] = useState(false);
   const [doctors, setDoctors] = useState<DoctorWithSpecialty[]>([]);
   const [specialties, setSpecialties] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingDoctors, setIsLoadingDoctors] = useState(true);
   const [doctorAppointments, setDoctorAppointments] = useState<DoctorAppointment[]>([]);
   const [patientAppointments, setPatientAppointments] = useState<DoctorAppointment[]>([]);
+  const [appointmentsEnabled, setAppointmentsEnabled] = useState(true);
   const supabase = createClientComponentClient<Database>();
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      specialty: '',
-      doctorId: '',
-      time: '',
-      type: '',
-      duration: '',
-      notes: '',
-    },
   });
+
+  // Check if appointments are enabled
+  useEffect(() => {
+    const checkAppointmentsStatus = async () => {
+      try {
+        const response = await fetch('/api/settings');
+        const data = await response.json();
+        if (data?.appointments?.enabled === false) {
+          setAppointmentsEnabled(false);
+          toast({
+            title: "Appointment Booking Temporarily Disabled",
+            description: "The appointment booking system is currently disabled by the administrator. This is typically done during schedule updates or system maintenance. Please try again later or contact support if you have an urgent medical need.",
+            variant: "destructive",
+            duration: 6000, // Show for 6 seconds due to longer message
+          });
+          onClose();
+        }
+      } catch (error) {
+        console.error('Error checking appointments status:', error);
+      }
+    };
+
+    if (open) {
+      checkAppointmentsStatus();
+    }
+  }, [open, onClose, toast]);
 
   useEffect(() => {
     console.log('Modal open state:', open);
@@ -178,7 +196,7 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
       }
 
       console.log('Fetching doctors for specialty:', selectedSpecialty);
-      setIsLoadingDoctors(true);
+      setIsLoading(true);
       
       try {
         // First get users who are doctors
@@ -226,7 +244,7 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
           variant: 'destructive',
         });
       } finally {
-        setIsLoadingDoctors(false);
+        setIsLoading(false);
       }
     };
 
@@ -324,6 +342,16 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
   }, [form.watch('doctorId'), form.watch('date'), session?.user?.id, supabase, toast]);
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
+    if (!appointmentsEnabled) {
+      toast({
+        title: "Appointment Booking Temporarily Disabled",
+        description: "The appointment booking system is currently disabled by the administrator. This is typically done during schedule updates or system maintenance. Please try again later or contact support if you have an urgent medical need.",
+        variant: "destructive",
+        duration: 6000,
+      });
+      return;
+    }
+
     console.log('Submitting appointment data:', data);
     
     if (status !== 'authenticated' || !session?.user?.id) {
@@ -449,19 +477,19 @@ export function BookAppointmentModal({ open, onClose }: BookAppointmentModalProp
                     <Select 
                       onValueChange={field.onChange} 
                       value={field.value}
-                      disabled={isLoadingDoctors || !form.getValues('specialty')}
+                      disabled={isLoading || !form.getValues('specialty')}
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder={
                           !form.getValues('specialty') 
                             ? "First select a specialty" 
-                            : isLoadingDoctors 
+                            : isLoading 
                               ? "Loading doctors..." 
                               : "Select a doctor"
                         } />
                       </SelectTrigger>
                       <SelectContent>
-                        {isLoadingDoctors ? (
+                        {isLoading ? (
                           <SelectItem value="loading" disabled>
                             Loading doctors...
                           </SelectItem>

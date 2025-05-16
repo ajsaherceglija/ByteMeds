@@ -252,7 +252,7 @@ export default function DashboardPage() {
                 <p className="text-sm text-muted-foreground">
                   {dashboardData.favoriteDoctor.visitCount} visits
                   {dashboardData.favoriteDoctor.latestVisit && (
-                    <> · Last visit: {format(new Date(dashboardData.favoriteDoctor.latestVisit), 'PP')}</>
+                    <> · Last visit: {format(new Date(Math.min(Date.now(), new Date(dashboardData.favoriteDoctor.latestVisit).getTime())), 'PP')}</>
                   )}
                 </p>
               </div>

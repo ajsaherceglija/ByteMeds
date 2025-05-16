@@ -1,36 +1,221 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ByteMeds - Medical Appointment Management System
+
+ByteMeds is a modern, full-stack medical appointment management system built with Next.js, Supabase, and TypeScript. The application provides a comprehensive platform for managing medical appointments, user registrations, and administrative controls.
+
+## Features
+
+### Authentication & User Management
+- **Role-based Authentication**:
+  - Patient accounts for booking appointments and managing health records
+  - Doctor accounts with specialty-specific features
+  - Administrator accounts with full system control
+  - Secure session management with NextAuth.js
+- **Registration System**:
+  - Configurable registration system (can be enabled/disabled by administrators)
+  - Email validation
+  - Password strength requirements
+  - Automatic role assignment
+- **Profile Management**:
+  - Personal information management
+  - Medical history tracking
+  - Contact information updates
+  - Emergency contact management
+
+### Patient Dashboard
+- **Appointment Management**:
+  - View upcoming and past appointments
+  - Book new appointments with specialty-based doctor selection
+  - Real-time availability checking
+  - Appointment reminders
+- **Medical History**:
+  - Access to personal medical history
+  - View test results and diagnoses
+  - Track prescriptions and medications
+  - Download medical reports
+- **Doctor Search**:
+  - Search doctors by specialty
+  - View doctor availability
+- **AI Powered Analysis**:
+  - Learn more about your symptoms and what to do about them with the advice given by the AI
+  - Get doctor suggestions
+  - Get the analysis of your pictures
+
+### Doctor Dashboard
+- **Appointment Management**:
+  - Daily, weekly, and monthly schedule views
+  - Patient appointment history
+  - Quick access to patient records
+  - Appointment notes and follow-ups
+  - Ability to move the appointments to a later date
+- **Patient Management**:
+  - View patient medical histories
+  - Add medical notes and observations
+  - Prescribe medications
+  - Schedule follow-up appointments
+- **Availability Settings**:
+  - Set working hours
+  - Mark vacation days
+  - Block specific time slots
+  - Set appointment duration preferences
+
+### Administrative Panel
+- **System Settings**:
+  - Registration Control:
+    - Enable/disable new user registration
+    - Set registration requirements
+    - Manage email verification settings
+  - Appointment System:
+    - Enable/disable appointment booking
+    - Configure appointment types and durations
+    - Set booking rules and restrictions
+  - Maintenance Mode:
+    - Enable/disable system maintenance mode
+    - Set maintenance messages
+    - Allow admin access during maintenance
+- **User Management**:
+  - Assign and modify user roles
+
+### Appointment System Features
+- **Smart Booking System**:
+  - Intelligent conflict detection
+  - Automatic time slot management
+  - Multiple appointment types with varying durations:
+    - Check-ups (30-45 minutes)
+    - Follow-ups (15-30 minutes)
+    - Consultations (45-60 minutes)
+    - Tests/Screenings (30-45 minutes)
+    - Vaccinations (15-30 minutes)
+- **Scheduling Logic**:
+  - Working hours enforcement
+  - Weekend/holiday handling
+  - Double-booking prevention
+
+### Security Features
+- **Protected Routes**:
+  - Role-based access control (RBAC)
+  - Session validation
+  - Route protection middleware
+  - Secure API endpoints
+- **Maintenance Mode**:
+  - System-wide maintenance control
+  - Admin override capabilities
+  - Maintenance page customization
+  - Scheduled maintenance planning
+- **Error Handling**:
+  - Comprehensive error logging
+  - User-friendly error messages
+  - Form validation
+  - API error handling
+- **Data Protection**:
+  - Encrypted data storage
+  - Secure password hashing
+  - HIPAA compliance measures
+  - Regular security audits
+
+### UI/UX Features
+- **Responsive Design**:
+  - Tablet/Mobile and Desktop optimization
+  - Dark/light mode support (based on the system preference)
+  - Accessible interface
+- **Interactive Components**:
+  - Real-time form validation
+  - Dynamic loading states
+  - Toast notifications
+  - Modal confirmations
+- **Navigation**:
+  - Intuitive menu structure
+  - Breadcrumb navigation
+  - Quick action shortcuts
+  - Search functionality
+
+## Technical Stack
+
+### Frontend
+- Next.js 13+ (App Router)
+- TypeScript
+- Tailwind CSS
+- shadcn/ui Components
+- Framer Motion for animations
+
+### Backend
+- Supabase (PostgreSQL)
+- NextAuth.js for authentication
+- Server Actions for API routes
+
+### Key Libraries
+- `date-fns` for date manipulation
+- `zod` for schema validation
+- `react-hook-form` for form management
+- `lucide-react` for icons
+- `sonner` for toast notifications
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+- Node.js 16.8 or later
+- npm or yarn
+- Supabase account
 
+### Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/ByteMeds.git
+cd ByteMeds
+```
+
+2. Install dependencies:
+```bash
+npm install
+# or
+yarn install
+```
+
+3. Set up environment variables:
+Create a `.env.local` file with the following variables:
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXTAUTH_SECRET=your_nextauth_secret
+NEXTAUTH_URL=http://localhost:3000
+```
+
+4. Run the development server:
 ```bash
 npm run dev
 # or
 yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Database Schema
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The application uses the following main tables:
+- users
+- doctors
+- appointments
+- medical_records
+- prescriptions
+- system_settings
 
-## Learn More
+For detailed schema information, refer to the `types/supabase.ts` file.
 
-To learn more about Next.js, take a look at the following resources:
+## Contributing
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Acknowledgments
+
+- [Next.js](https://nextjs.org/)
+- [Supabase](https://supabase.io/)
+- [shadcn/ui](https://ui.shadcn.com/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [TypeScript](https://www.typescriptlang.org/)

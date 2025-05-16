@@ -166,13 +166,25 @@ export async function POST(request: Request) {
     }
 
     // Prepare the prompt for ChatGPT
-    const prompt = `As a senior medical consultant with extensive clinical experience, provide a comprehensive medical analysis of the following symptoms. Your response must be in JSON format with the specified fields. This analysis will be used by healthcare providers to make clinical decisions.
+    let fullPrompt = `As a senior medical consultant with extensive clinical experience, provide a comprehensive medical analysis of the following symptoms. Your response must be in JSON format with the specified fields. This analysis will be used by healthcare providers to make clinical decisions.
 
 Symptoms: ${symptoms}
 
-Available specialties: ${specialties.join(', ')}
+Available specialties: ${specialties.join(', ')}`;
 
-Please provide a detailed clinical analysis considering:
+    // If there's an image, add it to the prompt
+    if (image) {
+      try {
+        const imageBuffer = await image.arrayBuffer();
+        const base64Image = Buffer.from(imageBuffer).toString('base64');
+        fullPrompt += `\n\nAn image has been provided with the following base64 encoding: ${base64Image}. Please consider any visible symptoms or conditions shown in the image in your analysis.`;
+      } catch (error) {
+        console.error('Error processing image:', error);
+        // Continue with analysis even if image processing fails
+      }
+    }
+
+    fullPrompt += `\n\nPlease provide a detailed clinical analysis considering:
 
 1. Clinical Assessment
    - Primary symptoms and their characteristics
@@ -223,6 +235,15 @@ Please provide a detailed clinical analysis considering:
    - Equipment and resources needed
    - Follow-up care requirements
 
+7. Treatment Options
+   - Immediate actions required
+   - Short-term treatment plan
+   - Long-term management strategy
+   - Medication recommendations
+   - Non-pharmacological interventions
+   - Lifestyle modifications
+   - Monitoring and follow-up requirements
+
 IMPORTANT: Respond in this exact JSON format, with no additional text:
 {
   "priority": "Low|Medium|High",
@@ -248,41 +269,44 @@ IMPORTANT: Respond in this exact JSON format, with no additional text:
   },
   "requiredTests": ["test1", "test2"],
   "monitoringParameters": ["parameter1", "parameter2"],
-  "patientEducation": ["point1", "point2"]
+  "patientEducation": ["point1", "point2"],
+  "treatmentOptions": {
+    "immediate": ["action1", "action2"],
+    "shortTerm": ["action1", "action2"],
+    "longTerm": ["action1", "action2"],
+    "medications": [
+      {
+        "name": "medication name",
+        "dosage": "dosage information",
+        "frequency": "frequency of administration",
+        "duration": "duration of treatment",
+        "route": "route of administration",
+        "precautions": ["precaution1", "precaution2"],
+        "monitoring": ["parameter1", "parameter2"],
+        "expectedOutcome": "expected outcome description",
+        "potentialComplications": ["complication1", "complication2"]
+      }
+    ],
+    "procedures": [
+      {
+        "name": "procedure name",
+        "timing": "when to perform",
+        "rationale": "reason for procedure",
+        "precautions": ["precaution1", "precaution2"]
+      }
+    ],
+    "lifestyleModifications": [
+      {
+        "modification": "modification description",
+        "rationale": "reason for modification",
+        "expectedOutcome": "expected outcome",
+        "timeline": "implementation timeline"
+      }
+    ]
+  }
 }`;
 
     try {
-      // If there's an image, analyze it first
-      let imageAnalysis = '';
-      if (image) {
-        const imageBuffer = await image.arrayBuffer();
-        const base64Image = Buffer.from(imageBuffer).toString('base64');
-
-        const imageResponse = await openai.chat.completions.create({
-          model: "gpt-3.5-turbo",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { 
-                  type: "text", 
-                  text: "As a medical imaging expert, provide a detailed clinical analysis of this image. Focus on:\n1. Visible anatomical structures and their condition\n2. Any pathological findings or abnormalities\n3. Quality and diagnostic value of the image\n4. Additional views or imaging modalities needed\n5. Specific measurements or features to note\n6. Comparison with normal findings\nProvide a detailed medical analysis using proper medical terminology." 
-                },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:${image.type};base64,${base64Image}`,
-                  },
-                },
-              ],
-            },
-          ],
-          max_tokens: 1000,
-        });
-
-        imageAnalysis = imageResponse.choices[0].message.content || '';
-      }
-
       // Get the final analysis
       const completion = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
@@ -293,9 +317,7 @@ IMPORTANT: Respond in this exact JSON format, with no additional text:
           },
           {
             role: "user",
-            content: imageAnalysis 
-              ? `${prompt}\n\nAdditional image analysis: ${imageAnalysis}`
-              : prompt,
+            content: fullPrompt,
           },
         ],
         response_format: { type: "json_object" },
@@ -346,7 +368,9 @@ IMPORTANT: Respond in this exact JSON format, with no additional text:
           immediate: [],
           shortTerm: [],
           longTerm: [],
-          medications: []
+          medications: [],
+          procedures: [],
+          lifestyleModifications: []
         },
         followUpPlan: analysis.followUpPlan || {
           timeline: 'Not specified',
