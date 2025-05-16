@@ -28,10 +28,11 @@ interface DashboardData {
   nextCheckup: any | null;
   favoriteDoctor: {
     id: string;
-    specialty: string | null;
     users: {
       name: string;
     };
+    visitCount: number;
+    latestVisit: string;
   } | null;
   recentActivity: any[];
 }
@@ -90,34 +91,25 @@ export default function DashboardPage() {
         // Find the next checkup (next upcoming appointment)
         const nextCheckup = appointments?.[0] || null;
 
-        // Find favorite doctor (most appointments with)
+        // Find favorite doctor (doctor with most appointments)
         const { data: doctorStats, error: doctorStatsError } = await supabase
-          .from('appointments')
-          .select(`
-            doctor_id,
-            doctors!inner (
-              id,
-              specialty,
-              users!inner (
-                name
-              )
-            )
-          `)
-          .eq('patient_id', session.user.id)
-          .eq('is_active', true)
-          .order('created_at', { ascending: false })
-          .limit(1);
+          .rpc('get_favorite_doctor', {
+            p_patient_id: session.user.id
+          });
 
         if (doctorStatsError) {
           console.error('Doctor stats error:', doctorStatsError);
           throw doctorStatsError;
         }
 
-        const doctorData = doctorStats?.[0]?.doctors?.[0];
+        const doctorData = doctorStats?.[0];
         const favoriteDoctor = doctorData ? {
-          id: doctorData.id,
-          specialty: doctorData.specialty,
-          users: doctorData.users[0]
+          id: doctorData.doctor_id,
+          users: {
+            name: doctorData.doctor_name
+          },
+          visitCount: doctorData.visit_count,
+          latestVisit: doctorData.latest_visit
         } : null;
 
         // Fetch recent activity
@@ -257,9 +249,12 @@ export default function DashboardPage() {
             {dashboardData.favoriteDoctor ? (
               <div className="space-y-1">
                 <p className="text-2xl font-bold">Dr. {dashboardData.favoriteDoctor.users.name}</p>
-                {dashboardData.favoriteDoctor.specialty && (
-                  <p className="text-sm text-muted-foreground">{dashboardData.favoriteDoctor.specialty}</p>
-                )}
+                <p className="text-sm text-muted-foreground">
+                  {dashboardData.favoriteDoctor.visitCount} visits
+                  {dashboardData.favoriteDoctor.latestVisit && (
+                    <> · Last visit: {format(new Date(dashboardData.favoriteDoctor.latestVisit), 'PP')}</>
+                  )}
+                </p>
               </div>
             ) : (
               <p className="text-muted-foreground">No regular doctor yet</p>

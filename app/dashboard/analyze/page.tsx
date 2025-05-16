@@ -836,7 +836,7 @@ export default function AnalyzePage() {
                         
                         <div className="flex items-center">
                           <Button variant="default" size="sm" asChild>
-                            <Link href={`/dashboard/appointments/new?doctor=${doctor.id}`}>
+                            <Link href={`/dashboard/appointments`}>
                               Book Appointment
                             </Link>
                           </Button>
