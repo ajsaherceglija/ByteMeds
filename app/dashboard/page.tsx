@@ -93,7 +93,7 @@ export default function DashboardPage() {
 
         // Find favorite doctor (doctor with most appointments)
         const { data: doctorStats, error: doctorStatsError } = await supabase
-          .rpc('get_favorite_doctor', {
+          .rpc('get_favorite_doctor_all', {
             p_patient_id: session.user.id
           });
 
