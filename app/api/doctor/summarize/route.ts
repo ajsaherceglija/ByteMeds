@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsWorker from 'pdfjs-dist/build/pdf.worker';
+import mammoth from 'mammoth';
+
+if (typeof window === 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+}
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -12,6 +19,70 @@ const MAX_FILE_SIZE = 1024 * 1024; // 1MB per file
 const MAX_TOTAL_SIZE = 5 * 1024 * 1024; // 5MB total
 const MAX_FILES = 10; // Maximum number of files
 let lastRequestTime = 0;
+
+// Function to extract text from PDF
+async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
+  try {
+    // Load the PDF document
+    const loadingTask = pdfjsLib.getDocument(new Uint8Array(buffer));
+    const pdfDocument = await loadingTask.promise;
+    
+    let fullText = '';
+    
+    // Iterate through each page
+    for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+      const page = await pdfDocument.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items
+        .map((item: any) => item.str)
+        .join(' ');
+      fullText += pageText + '\n';
+    }
+    
+    return fullText.trim();
+  } catch (error) {
+    console.error('Error extracting PDF text:', error);
+    throw new Error('Failed to read PDF content');
+  }
+}
+
+// Function to extract text from DOCX
+async function extractDocxText(buffer: ArrayBuffer): Promise<string> {
+  try {
+    const result = await mammoth.extractRawText({ arrayBuffer: buffer });
+    return result.value.trim();
+  } catch (error) {
+    console.error('Error extracting DOCX text:', error);
+    throw new Error('Failed to read DOCX content');
+  }
+}
+
+// Function to extract text based on file type
+async function extractText(file: File): Promise<string> {
+  try {
+    const buffer = await file.arrayBuffer();
+    const fileType = file.type;
+    
+    switch (fileType) {
+      case 'application/pdf':
+        return await extractPdfText(buffer);
+      
+      case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+        return await extractDocxText(buffer);
+      
+      case 'text/plain':
+        return new TextDecoder().decode(buffer).trim();
+      
+      case 'application/msword':
+        throw new Error('Legacy .doc files are not supported. Please convert to .docx');
+      
+      default:
+        throw new Error(`Unsupported file type: ${fileType}`);
+    }
+  } catch (error: any) {
+    throw new Error(`Error processing ${file.name}: ${error.message}`);
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -38,6 +109,10 @@ export async function POST(request: Request) {
       }
 
       const file = formData.get(`file${i}`) as File;
+      
+      if (!file || !file.size) {
+        continue; // Skip invalid files
+      }
       
       if (file.size > MAX_FILE_SIZE) {
         return NextResponse.json(
@@ -66,12 +141,18 @@ export async function POST(request: Request) {
 
     // Process each file and extract text content
     const fileContents = await Promise.all(files.map(async (file) => {
-      const buffer = await file.arrayBuffer();
-      const text = new TextDecoder().decode(buffer);
-      return {
-        name: file.name,
-        content: text.slice(0, 15000) // Limit content per file to avoid token limits
-      };
+      try {
+        console.log(`Processing file: ${file.name}, type: ${file.type}`);
+        const text = await extractText(file);
+        console.log(`Successfully extracted text from ${file.name}`);
+        return {
+          name: file.name,
+          content: text.slice(0, 15000) // Limit content per file to avoid token limits
+        };
+      } catch (error: any) {
+        console.error(`Error processing ${file.name}:`, error);
+        throw new Error(`Error processing ${file.name}: ${error.message}`);
+      }
     }));
 
     // Combine all file contents into a single prompt with clear separation
@@ -155,7 +236,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      { error: 'Failed to generate summary. Please try again.' },
+      { error: error.message || 'Failed to generate summary. Please try again.' },
       { status: 500 }
     );
   }

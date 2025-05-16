@@ -94,12 +94,14 @@ export default function SummarizePage() {
       try {
         const formData = new FormData();
         files.forEach((file, index) => {
-          formData.append(`file${index}`, file);
+          // Append each file with a unique key
+          formData.append(`file${index}`, file, file.name);
         });
 
         const response = await fetch('/api/doctor/summarize', {
           method: 'POST',
           body: formData,
+          // Remove the Content-Type header - let the browser set it with the boundary
         });
 
         if (!response.ok) {
