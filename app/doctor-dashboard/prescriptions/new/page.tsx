@@ -1,17 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import {
   Select,
   SelectContent,
@@ -19,312 +21,283 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-} from '@/components/ui/command';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { ArrowLeft, Check, ChevronsUpDown, Plus, X } from 'lucide-react';
-import Link from 'next/link';
-import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { createPrescription, getPatients, getMedications, type Patient, type Medication } from '../actions';
+import { toast } from 'sonner';
 
-// Mock data - replace with API calls
-const mockPatients = [
-  { id: 'P001', name: 'John Doe' },
-  { id: 'P002', name: 'Jane Smith' },
-  { id: 'P003', name: 'Alice Brown' },
-  { id: 'P004', name: 'Robert Wilson' },
-  { id: 'P005', name: 'Emily Davis' },
-];
+const prescriptionSchema = z.object({
+  patientId: z.string().min(1, 'Please select a patient'),
+  validUntil: z.string().min(1, 'Please select a validity date'),
+  medications: z.array(z.object({
+    medicationId: z.string().min(1, 'Please select a medication'),
+    dosage: z.string().min(1, 'Please enter dosage'),
+    frequency: z.string().min(1, 'Please enter frequency'),
+  })).min(1, 'Please add at least one medication'),
+  notes: z.string().optional(),
+});
 
-const mockMedications = [
-  'Amoxicillin',
-  'Ibuprofen',
-  'Omeprazole',
-  'Ciprofloxacin',
-  'Paracetamol',
-  'Metformin',
-  'Amlodipine',
-  'Lisinopril',
-];
-
-interface Medication {
-  name: string;
-  dosage: string;
-  frequency: string;
-  duration: string;
-  instructions: string;
-}
-
-interface PrescriptionForm {
-  patientId: string;
-  medications: Medication[];
-  notes: string;
-}
+type PrescriptionFormData = z.infer<typeof prescriptionSchema>;
 
 export default function NewPrescriptionPage() {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [formData, setFormData] = useState<PrescriptionForm>({
-    patientId: '',
-    medications: [
-      {
-        name: '',
-        dosage: '',
-        frequency: '',
-        duration: '',
-        instructions: '',
-      },
-    ],
-    notes: '',
+  const [loading, setLoading] = useState(false);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [medications, setMedications] = useState<Medication[]>([]);
+
+  const form = useForm<PrescriptionFormData>({
+    resolver: zodResolver(prescriptionSchema),
+    defaultValues: {
+      patientId: '',
+      validUntil: '',
+      medications: [{ medicationId: '', dosage: '', frequency: '' }],
+      notes: '',
+    },
   });
 
-  const handleAddMedication = () => {
-    setFormData(prev => ({
-      ...prev,
-      medications: [
-        ...prev.medications,
-        {
-          name: '',
-          dosage: '',
-          frequency: '',
-          duration: '',
-          instructions: '',
-        },
-      ],
-    }));
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [patientsData, medicationsData] = await Promise.all([
+          getPatients(),
+          getMedications(),
+        ]);
+
+        setPatients(patientsData);
+        setMedications(medicationsData);
+      } catch (error) {
+        console.error('Failed to load data:', error);
+        toast.error('Failed to load patients and medications');
+      }
+    }
+
+    loadData();
+  }, []);
+
+  const onSubmit = async (data: PrescriptionFormData) => {
+    try {
+      setLoading(true);
+      await createPrescription(data);
+      toast.success('Prescription created successfully');
+      router.push('/doctor-dashboard/prescriptions');
+    } catch (error) {
+      console.error('Error creating prescription:', error);
+      toast.error('Failed to create prescription');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRemoveMedication = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      medications: prev.medications.filter((_, i) => i !== index),
-    }));
+  const addMedication = () => {
+    const medications = form.getValues('medications');
+    form.setValue('medications', [
+      ...medications,
+      { medicationId: '', dosage: '', frequency: '' },
+    ]);
   };
 
-  const handleMedicationChange = (index: number, field: keyof Medication, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      medications: prev.medications.map((med, i) =>
-        i === index ? { ...med, [field]: value } : med
-      ),
-    }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Here you would make an API call to save the prescription
-    console.log('Submitting prescription:', formData);
-    
-    // Mock success - in real app, this would happen after successful API call
-    router.push('/doctor-dashboard/prescriptions');
+  const removeMedication = (index: number) => {
+    const medications = form.getValues('medications');
+    form.setValue(
+      'medications',
+      medications.filter((_, i) => i !== index)
+    );
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" asChild>
-          <Link href="/doctor-dashboard/prescriptions">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Prescriptions
-          </Link>
-        </Button>
-      </div>
-
       <div>
         <h1 className="text-3xl font-bold tracking-tight">New Prescription</h1>
         <p className="text-muted-foreground">
-          Create a new prescription for a patient
+          Create a new prescription for your patient
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Patient Information</CardTitle>
-            <CardDescription>
-              Select the patient for this prescription
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Select Patient</Label>
-                <Popover open={open} onOpenChange={setOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={open}
-                      className="w-full justify-between"
-                    >
-                      {formData.patientId
-                        ? mockPatients.find((patient) => patient.id === formData.patientId)?.name
-                        : "Select patient..."}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-full p-0">
-                    <Command>
-                      <CommandInput placeholder="Search patients..." />
-                      <CommandEmpty>No patient found.</CommandEmpty>
-                      <CommandGroup>
-                        {mockPatients.map((patient) => (
-                          <CommandItem
-                            key={patient.id}
-                            value={patient.id}
-                            onSelect={(currentValue) => {
-                              setFormData(prev => ({ ...prev, patientId: currentValue }));
-                              setOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                formData.patientId === patient.id ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {patient.name}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Medications</CardTitle>
-            <CardDescription>
-              Add medications to the prescription
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {formData.medications.map((medication, index) => (
-              <div key={index} className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium">Medication {index + 1}</h4>
-                  {index > 0 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRemoveMedication(index)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Medication Name</Label>
+      <Card>
+        <CardHeader>
+          <CardTitle>Prescription Details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <FormField
+                control={form.control}
+                name="patientId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Patient</FormLabel>
                     <Select
-                      value={medication.name}
-                      onValueChange={(value) => handleMedicationChange(index, 'name', value)}
+                      onValueChange={field.onChange}
+                      value={field.value}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select medication" />
-                      </SelectTrigger>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a patient" />
+                        </SelectTrigger>
+                      </FormControl>
                       <SelectContent>
-                        {mockMedications.map((med) => (
-                          <SelectItem key={med} value={med}>
-                            {med}
+                        {patients.map((patient) => (
+                          <SelectItem key={patient.id} value={patient.id}>
+                            {patient.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Dosage</Label>
-                    <Input
-                      placeholder="e.g., 500mg"
-                      value={medication.dosage}
-                      onChange={(e) => handleMedicationChange(index, 'dosage', e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Frequency</Label>
-                    <Input
-                      placeholder="e.g., 3 times daily"
-                      value={medication.frequency}
-                      onChange={(e) => handleMedicationChange(index, 'frequency', e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Duration</Label>
-                    <Input
-                      placeholder="e.g., 7 days"
-                      value={medication.duration}
-                      onChange={(e) => handleMedicationChange(index, 'duration', e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <Label>Instructions</Label>
-                    <Input
-                      placeholder="e.g., Take with food"
-                      value={medication.instructions}
-                      onChange={(e) => handleMedicationChange(index, 'instructions', e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-            
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleAddMedication}
-              className="w-full"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Another Medication
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Additional Notes</CardTitle>
-            <CardDescription>
-              Add any additional notes or instructions
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <Label>Notes</Label>
-              <textarea
-                className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                placeholder="Enter any additional notes..."
-                value={formData.notes}
-                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-          </CardContent>
-        </Card>
 
-        <div className="flex gap-4">
-          <Button type="submit">Create Prescription</Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.push('/doctor-dashboard/prescriptions')}
-          >
-            Cancel
-          </Button>
-        </div>
-      </form>
+              <FormField
+                control={form.control}
+                name="validUntil"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Valid Until</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="date" 
+                        {...field}
+                        value={field.value || ''}
+                        min={new Date().toISOString().split('T')[0]}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium">Medications</h3>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={addMedication}
+                  >
+                    Add Medication
+                  </Button>
+                </div>
+
+                {form.watch('medications').map((_, index) => (
+                  <div key={index} className="space-y-4 p-4 border rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <h4 className="font-medium">Medication {index + 1}</h4>
+                      {index > 0 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => removeMedication(index)}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name={`medications.${index}.medicationId`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Medication</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select a medication" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {medications.map((medication) => (
+                                <SelectItem key={medication.id} value={medication.id}>
+                                  {medication.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name={`medications.${index}.dosage`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Dosage</FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="e.g., 500mg" 
+                                {...field}
+                                value={field.value || ''}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name={`medications.${index}.frequency`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Frequency</FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="e.g., Twice daily" 
+                                {...field}
+                                value={field.value || ''}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes</FormLabel>
+                    <FormControl>
+                      <textarea
+                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        placeholder="Add any additional notes or instructions..."
+                        {...field}
+                        value={field.value || ''}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end space-x-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.back()}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading ? 'Creating...' : 'Create Prescription'}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
     </div>
   );
 } 
