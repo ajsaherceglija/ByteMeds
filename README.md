@@ -57,6 +57,10 @@ ByteMeds is a modern, full-stack medical appointment management system built wit
   - Mark vacation days
   - Block specific time slots
   - Set appointment duration preferences
+- **AI Synptom Analysis**:
+  - AI tool that analyzes patient symptoms
+  - Processes text prompts and uploaded images
+  - Assists in preliminary diagnosis and treatment suggestions
 
 ### Administrative Panel
 - **System Settings**:
